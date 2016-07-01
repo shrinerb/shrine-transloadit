@@ -1,0 +1,17 @@
+source "https://rubygems.org"
+
+gem "roda", "~> 2.15"
+gem "tilt"
+gem "rack_csrf"
+
+gem "sequel"
+gem "sqlite3"
+
+gem "shrine"
+gem "shrine-transloadit", path: ".."
+gem "aws-sdk", "~> 2.1"
+gem "dotenv"
+
+gem "sucker_punch", "~> 2.0"
+
+gem "pry-byebug"
