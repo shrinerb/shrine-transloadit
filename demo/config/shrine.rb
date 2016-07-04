@@ -6,7 +6,7 @@ require "shrine/storage/s3"
 require "./jobs/transloadit_job"
 require "./jobs/delete_job"
 
-# A no-op storage which represents a remote URL
+# A fake storage which represents a remote URL
 class UrlStorage
   def url(id, **options)
     id

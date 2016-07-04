@@ -56,6 +56,9 @@ a URL to the route in your app where you'd like Transloadit to POST the results
 of processing. Then you can call the plugin again in the route to save the
 results to your attachment column.
 
+The **[demo app]** shows a complete implementation of this flow, and can serve
+as a good baseline for your own implementation.
+
 ## Usage
 
 Transloadit assemblies are built inside `#transloadit_process` method in your
@@ -209,6 +212,56 @@ response.reload!
 response.finished? #=> true
 ```
 
+### Direct uploads
+
+Transloadit supports direct uploads, allowing you to do additional processing
+on upload, along with a [jQuery plugin] for easy integration. Generally you
+only want to do some light processing on direct uploads, and without any
+exporting, so that you have better control over your Transloadit bandwidth.
+
+When direct upload finishes, Transloadit returns information about the uploaded
+files, including a temporary URL and useful metadata. You'll want to store both
+to the database, URL you will need for additional processing after the record
+is saved.
+
+Since you only want to store a custom URL, but still conform to Shrine's
+storage abstraction, you can create a fake storage which will allow you to save
+the URL to the "id" attachment attribute, without having to change any of your
+other code.
+
+```rb
+class UrlStorage
+  def url(id, **options)
+    id
+  end
+end
+
+Shrine.storages = {
+  cache: UrlStorage.new,
+  store: Shrine::Storage::S3.new(s3_options),
+}
+```
+
+Now when you receive the results of processing, you can assign URL to the "id"
+attachment attribute:
+
+```js
+{
+  id: data['url'], // <====
+  storage: 'cache',
+  metadata: {
+    size: data['size'],
+    filename: data['name'],
+    mime_type: data['mime'],
+    width: data['meta'] && data['meta']['width'],
+    height: data['meta'] && data['meta']['height'],
+    transloadit: data['meta'],
+  }
+}
+```
+
+See the **[demo app]** for a complete implementation.
+
 ### Import & Export
 
 Every `TransloaditFile` needs to have an import and an export step. This plugin
@@ -335,7 +388,7 @@ $ bundle exec rake test
 
 ## License
 
-[MIT](LICENSE.txt)
+[MIT](/LICENSE.txt)
 
 [Shrine]: https://github.com/janko-m/shrine
 [Transloadit]: https://transloadit.com/
@@ -343,3 +396,5 @@ $ bundle exec rake test
 [transloadit gem]: https://github.com/transloadit/ruby-sdk
 [robot and arguments]: https://transloadit.com/docs/conversion-robots/
 [templates]: https://transloadit.com/docs/#templates
+[jQuery plugin]: https://github.com/transloadit/jquery-sdk
+[demo app]: /demo
