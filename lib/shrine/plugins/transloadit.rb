@@ -79,6 +79,19 @@ class Shrine
             _delete(stored_file, phase: :abort)
           end
         end
+
+        def uploaded_file(value)
+          if value.is_a?(String) || value.is_a?(Hash)
+            value = JSON.parse(value) if value.is_a?(String)
+            if value["url"].is_a?(String) # from direct upload
+              cache.transloadit_uploaded_file(value)
+            else
+              super
+            end
+          else
+            super
+          end
+        end
       end
 
       module ClassMethods
@@ -93,8 +106,9 @@ class Shrine
       module InstanceMethods
         def transloadit_uploaded_file(result)
           case url = result.fetch("url")
+          when /tmp\.transloadit\.com/
+            id = url
           when /amazonaws\.com/
-            raise Error, "Cannot save a processed file which wasn't exported: #{url.inspect}" if url.include?("tmp.transloadit.com")
             path = URI(url).path
             id = path.match(/^\/#{storage.prefix}/).post_match
           else
@@ -103,7 +117,7 @@ class Shrine
 
           self.class::UploadedFile.new(
             "id"       => id,
-            "storage"  => storage_key,
+            "storage"  => storage_key.to_s,
             "metadata" => {
               "filename"    => result.fetch("name"),
               "size"        => result.fetch("size"),

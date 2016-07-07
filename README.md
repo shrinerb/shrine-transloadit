@@ -218,25 +218,10 @@ only want to do some light processing on direct uploads, and without any
 exporting, so that you have better control over your Transloadit bandwidth.
 
 When direct upload finishes, Transloadit returns information about the uploaded
-files, including a temporary URL and useful metadata. You'll want to store both
-to the database, URL you will need for additional processing after the record
-is saved. This is the JavaScript needed to convert Transloadit's data hash into
-Shrine's format:
-
-```js
-{
-  id: data['url'], // we save the URL
-  storage: 'cache',
-  metadata: {
-    size: data['size'],
-    filename: data['name'],
-    mime_type: data['mime'],
-    width: data['meta'] && data['meta']['width'],
-    height: data['meta'] && data['meta']['height'],
-    transloadit: data['meta'],
-  }
-}
-```
+file(s). You can just convert that data to a JSON string and pass it as attachment
+value (e.g. by assigning it to the hidden attachment field), and the plugin
+will automatically recognize it and convert it to Shrine's attachment
+representation.
 
 See the **[demo app]** for a complete implementation of direct uploads.
 

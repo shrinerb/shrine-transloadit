@@ -32,23 +32,8 @@
       }
     },
     onSuccess: function(assembly) {
-      var files = assembly['uploads'].map(function(data) {
-        return {
-          id: data['url'],
-          storage: 'cache',
-          metadata: {
-            size: data['size'],
-            filename: data['name'],
-            mime_type: data['mime'],
-            width: data['meta'] && data['meta']['width'],
-            height: data['meta'] && data['meta']['height'],
-            transloadit: data['meta'],
-          }
-        }
-      });
-
       var data = {
-        photos: files.map(function(file) {
+        photos: assembly['uploads'].map(function(file) {
           return {image: JSON.stringify(file)};
         }),
         _csrf: $("input[name=_csrf]").val(),
