@@ -61,7 +61,7 @@ class Shrine
           response = assembly.submit!
           raise Error, "#{response["error"]}: #{response["message"]}" if response["error"]
           cached_file.metadata["transloadit_response"] = response.body.to_json
-          swap(cached_file)
+          swap(cached_file) or _set(cached_file)
         end
 
         def transloadit_save(response, valid: true)
@@ -77,7 +77,7 @@ class Shrine
           end
 
           if valid
-            update(stored_file)
+            swap(stored_file)
           else
             _delete(stored_file, phase: :abort)
           end
