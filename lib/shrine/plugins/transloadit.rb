@@ -13,6 +13,7 @@ class Shrine
         raise Error, "The :auth_key is required for transloadit plugin" if uploader.opts[:transloadit_auth_key].nil?
         raise Error, "The :auth_secret is required for transloadit plugin" if uploader.opts[:transloadit_auth_secret].nil?
 
+        uploader.storages[:cache] ||= UrlStorage.new
         uploader.opts[:backgrounding_promote] ||= proc { transloadit_process }
       end
 
@@ -258,6 +259,12 @@ class Shrine
 
         def exported?
           @steps.any? && @steps.last.robot.end_with?("/store")
+        end
+      end
+
+      class UrlStorage
+        def url(id, **options)
+          id
         end
       end
     end

@@ -21,27 +21,25 @@ gem "aws-sdk"
 require "shrine"
 require "shrine/storage/s3"
 
-s3_options = {
+Shrine.storages[:store] = Shrine::Storage::S3.new(
   access_key_id: "xyz",
   secret_access_key: "abc",
   region: "my-region",
   bucket: "my-app",
-}
-
-Shrine.storages = {
-  cache: Shrine::Storage::S3.new(prefix: "cache", **s3_options),
-  store: Shrine::Storage::S3.new(prefix: "store", **s3_options),
-}
+)
 
 Shrine.plugin :transloadit,
   auth_key:    "your transloadit key",
   auth_secret: "your transloadit secret"
 ```
+
 ```rb
 post "/webhooks/transloadit" do
   Shrine::Attacher.transloadit_save(params)
 end
 ```
+
+With this setup you can do [direct uploads](#direct-uploads) to Transloadit.
 
 ## How it works
 
@@ -222,32 +220,12 @@ exporting, so that you have better control over your Transloadit bandwidth.
 When direct upload finishes, Transloadit returns information about the uploaded
 files, including a temporary URL and useful metadata. You'll want to store both
 to the database, URL you will need for additional processing after the record
-is saved.
-
-Since you only want to store a custom URL, but still conform to Shrine's
-storage abstraction, you can create a fake storage which will allow you to save
-the URL to the "id" attachment attribute, without having to change any of your
-other code.
-
-```rb
-class UrlStorage
-  def url(id, **options)
-    id
-  end
-end
-
-Shrine.storages = {
-  cache: UrlStorage.new,
-  store: Shrine::Storage::S3.new(s3_options),
-}
-```
-
-Now when you receive the results of processing, you can assign URL to the "id"
-attachment attribute:
+is saved. This is the JavaScript needed to convert Transloadit's data hash into
+Shrine's format:
 
 ```js
 {
-  id: data['url'], // <====
+  id: data['url'], // we save the URL
   storage: 'cache',
   metadata: {
     size: data['size'],
@@ -260,7 +238,7 @@ attachment attribute:
 }
 ```
 
-See the **[demo app]** for a complete implementation.
+See the **[demo app]** for a complete implementation of direct uploads.
 
 ### Import & Export
 
