@@ -288,6 +288,28 @@ describe Shrine::Plugins::Transloadit do
     end
   end
 
+  describe Shrine::Plugins::Transloadit::UrlStorage do
+    before do
+      @storage = Shrine::Plugins::Transloadit::UrlStorage.new
+    end
+
+    it "implements #url" do
+      assert_equal "http://example.com", @storage.url("http://example.com")
+    end
+
+    it "implements #download" do
+      assert_instance_of Tempfile, @storage.download("http://example.com")
+    end
+
+    it "implements #open" do
+      assert_instance_of Down::ChunkedIO, @storage.open("http://example.com")
+    end
+
+    it "implements #exists?" do
+      assert_equal true, @storage.exists?("http://example.com")
+    end
+  end
+
   it "propagates Transloadit errors" do
     @attacher.shrine_class.class_eval do
       def transloadit_process(io, context)

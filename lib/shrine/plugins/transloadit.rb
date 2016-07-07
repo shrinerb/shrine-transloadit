@@ -1,7 +1,10 @@
 require "transloadit"
+require "down"
+
 require "uri"
 require "json"
 require "openssl"
+require "net/http"
 
 class Shrine
   module Plugins
@@ -280,6 +283,21 @@ class Shrine
       end
 
       class UrlStorage
+        def download(id)
+          Down.download(id)
+        end
+
+        def open(id)
+          Down.open(id)
+        end
+
+        def exists?(id)
+          response = nil
+          uri = URI(id)
+          Net::HTTP.start(uri.host, uri.port) { |http| response = http.head(id) }
+          response.code.to_i == 200
+        end
+
         def url(id, **options)
           id
         end
