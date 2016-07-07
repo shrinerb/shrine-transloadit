@@ -36,8 +36,7 @@ class Shrine
           data = response["fields"]["attacher"]
           attacher = self.load(data)
           cached_file = attacher.uploaded_file(data["attachment"])
-          return if cached_file != attacher.get
-          attacher.transloadit_save(response)
+          attacher.transloadit_save(response, valid: attacher.get == cached_file)
           attacher
         end
 
@@ -62,7 +61,7 @@ class Shrine
           swap(cached_file)
         end
 
-        def transloadit_save(response)
+        def transloadit_save(response, valid: true)
           if versions = response["fields"]["versions"]
             stored_file = versions.inject({}) do |hash, (name, key)|
               result = response["results"].fetch(key)[0]
@@ -74,7 +73,11 @@ class Shrine
             stored_file = store.transloadit_uploaded_file(result)
           end
 
-          update(stored_file)
+          if valid
+            update(stored_file)
+          else
+            _delete(stored_file, phase: :abort)
+          end
         end
       end
 
