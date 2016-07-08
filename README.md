@@ -21,16 +21,16 @@ gem "aws-sdk"
 require "shrine"
 require "shrine/storage/s3"
 
+Shrine.plugin :transloadit,
+  auth_key:    "your transloadit key",
+  auth_secret: "your transloadit secret"
+
 Shrine.storages[:store] = Shrine::Storage::S3.new(
   access_key_id: "xyz",
   secret_access_key: "abc",
   region: "my-region",
   bucket: "my-app",
 )
-
-Shrine.plugin :transloadit,
-  auth_key:    "your transloadit key",
-  auth_secret: "your transloadit secret"
 ```
 
 ```rb
@@ -39,7 +39,9 @@ post "/webhooks/transloadit" do
 end
 ```
 
-With this setup you can do [direct uploads](#direct-uploads) to Transloadit.
+This setup assumes you want to do [direct uploads](#direct-uploads) to
+Transloadit. This is completely optional, the plugin will work equally well
+with whatever your `:cache` storage is.
 
 ## How it works
 
