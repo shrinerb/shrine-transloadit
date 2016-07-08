@@ -280,6 +280,12 @@ describe Shrine::Plugins::Transloadit do
     end
   end
 
+  describe "#transloadit_response" do
+    it "returns nil if there is no metadata" do
+      assert_equal nil, @cached_file.transloadit_response
+    end
+  end
+
   describe Shrine::Plugins::Transloadit::UrlStorage do
     before do
       @storage = Shrine::Plugins::Transloadit::UrlStorage.new

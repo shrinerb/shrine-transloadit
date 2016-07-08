@@ -232,7 +232,7 @@ class Shrine
       module FileMethods
         def transloadit_response
           @transloadit_response ||= (
-            body = metadata.fetch("transloadit_response")
+            body = metadata["transloadit_response"] or return
             body.instance_eval { def body; self; end }
             response = ::Transloadit::Response.new(body)
             response.extend ::Transloadit::Response::Assembly
