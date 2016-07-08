@@ -2,26 +2,18 @@ require "test_helper"
 
 describe Shrine::Plugins::Transloadit do
   around(:all) do |&block|
-    shrine_class = Class.new(Shrine)
-    shrine_class.storages[:cache] = $s3
-    @cached_file = shrine_class.new(:cache).upload(image)
+    @cached_file = Shrine.new(:cache).upload(image)
     super(&block)
-    $s3.clear!
+    Shrine.storages[:store].clear!
   end
 
   before do
-    @attacher = attacher do
-      plugin :versions
-      plugin :transloadit,
-        auth_key:    ENV.fetch("TRANSLOADIT_AUTH_KEY"),
-        auth_secret: ENV.fetch("TRANSLOADIT_AUTH_SECRET")
-    end
-
-    @record = @attacher.record
+    @attacher = @record.attachment_attacher
+    @store = @attacher.store
   end
 
   it "works for single files" do
-    @attacher.shrine_class.class_eval do
+    @store.class.class_eval do
       def transloadit_process(io, context)
         transloadit_assembly(transloadit_file(io))
       end
@@ -38,7 +30,7 @@ describe Shrine::Plugins::Transloadit do
   end
 
   it "works for versions" do
-    @attacher.shrine_class.class_eval do
+    @store.class.class_eval do
       def transloadit_process(io, context)
         transloadit_assembly(original: transloadit_file(io))
       end
@@ -55,7 +47,7 @@ describe Shrine::Plugins::Transloadit do
   end
 
   it "works on class-level with webhooks & background jobs flow" do
-    @attacher.shrine_class.class_eval do
+    @store.class.class_eval do
       def transloadit_process(io, context)
         notify_url = "https://echo-webhook.herokuapp.com/#{SecureRandom.hex(5)}"
         transloadit_assembly(transloadit_file(io), notify_url: notify_url)
@@ -84,7 +76,7 @@ describe Shrine::Plugins::Transloadit do
   end
 
   it "populates metadata" do
-    @attacher.shrine_class.class_eval do
+    @store.class.class_eval do
       def transloadit_process(io, context)
         transloadit_assembly(transloadit_file(io))
       end
@@ -106,10 +98,10 @@ describe Shrine::Plugins::Transloadit do
     refute_empty attachment.metadata["transloadit"]
   end
 
-  describe "import step" do
+  describe "#transloadit_import_step" do
     it "accepts files from S3" do
       uploaded_file = @cached_file.dup
-      import = @attacher.store.transloadit_import_step("import", uploaded_file)
+      import = @store.transloadit_import_step("import", uploaded_file)
       assert_equal "/s3/import",                      import.robot
       assert_equal "import",                          import.name
       assert_equal ENV.fetch("S3_ACCESS_KEY_ID"),     import.options[:key]
@@ -124,13 +116,13 @@ describe Shrine::Plugins::Transloadit do
       uploaded_file.instance_eval { def storage; nil; end }
 
       uploaded_file.instance_eval { def url; "http://example.com"; end }
-      import = @attacher.store.transloadit_import_step("import", uploaded_file)
+      import = @store.transloadit_import_step("import", uploaded_file)
       assert_equal "/http/import",       import.robot
       assert_equal "import",             import.name
       assert_equal "http://example.com", import.options[:url]
 
       uploaded_file.instance_eval { def url; "https://example.com"; end }
-      import = @attacher.store.transloadit_import_step("import", uploaded_file)
+      import = @store.transloadit_import_step("import", uploaded_file)
       assert_equal "/http/import",       import.robot
       assert_equal "import",             import.name
       assert_equal "https://example.com", import.options[:url]
@@ -140,7 +132,7 @@ describe Shrine::Plugins::Transloadit do
       uploaded_file = @cached_file.dup
       uploaded_file.instance_eval { def storage; nil; end }
       uploaded_file.instance_eval { def url; "ftp://janko:secret@example.com/image.jpg"; end }
-      import = @attacher.store.transloadit_import_step("import", uploaded_file)
+      import = @store.transloadit_import_step("import", uploaded_file)
       assert_equal "/ftp/import", import.robot
       assert_equal "import",      import.name
       assert_equal "example.com", import.options[:host]
@@ -151,15 +143,15 @@ describe Shrine::Plugins::Transloadit do
 
     it "accepts additional step options" do
       uploaded_file = @cached_file.dup
-      import = @attacher.store.transloadit_import_step("import", uploaded_file, path: "foo")
+      import = @store.transloadit_import_step("import", uploaded_file, path: "foo")
       assert_equal "foo", import.options[:path]
     end
   end
 
-  describe "export step" do
+  describe "#transloadit_export_step" do
     it "accepts files from S3" do
       uploaded_file = @cached_file.dup
-      export = @attacher.store.transloadit_export_step("export")
+      export = @store.transloadit_export_step("export")
       assert_equal "/s3/store",                       export.robot
       assert_equal "export",                          export.name
       assert_equal ENV.fetch("S3_ACCESS_KEY_ID"),     export.options[:key]
@@ -170,30 +162,26 @@ describe Shrine::Plugins::Transloadit do
 
     it "accepts additional step options" do
       uploaded_file = @cached_file.dup
-      export = @attacher.store.transloadit_export_step("export", path: "foo")
+      export = @store.transloadit_export_step("export", path: "foo")
       assert_equal "foo", export.options[:path]
     end
   end
 
-  describe "creating assembly" do
-    before do
-      @uploader = @attacher.store
-    end
-
+  describe "#transloadit_assembly" do
     it "accepts additional assembly options" do
-      assembly = @uploader.transloadit_assembly({}, notify_url: "http://example.com")
+      assembly = @store.transloadit_assembly({}, notify_url: "http://example.com")
       assert_equal "http://example.com", assembly.options[:notify_url]
     end
 
     it "accepts a template as the first argument" do
-      assembly = @uploader.transloadit_assembly("my_template")
+      assembly = @store.transloadit_assembly("my_template")
       assert_equal "my_template", assembly.options[:template_id]
     end
 
     it "doesn't override passed in :steps and :fields" do
-      step = @uploader.transloadit.step("step1", "/image/resize")
-      file = @uploader.transloadit_file.add_step("step2", "/http/import")
-      assembly = @uploader.transloadit_assembly(file, steps: [step], fields: {foo: "bar"})
+      step = @store.transloadit.step("step1", "/image/resize")
+      file = @store.transloadit_file.add_step("step2", "/http/import")
+      assembly = @store.transloadit_assembly(file, steps: [step], fields: {foo: "bar"})
       steps = assembly.options[:steps]
       assert_includes steps.map(&:name), "step1"
       assert_includes steps.map(&:name), "step2"
@@ -201,15 +189,15 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "adds an export step if it's not present" do
-      file = @uploader.transloadit_file.add_step("import", "/http/import")
+      file = @store.transloadit_file.add_step("import", "/http/import")
 
-      assembly = @uploader.transloadit_assembly(file)
+      assembly = @store.transloadit_assembly(file)
       assert_equal 2,             assembly.options[:steps].count
       assert_equal "export",      assembly.options[:steps].last.name
       assert_equal "/s3/store",   assembly.options[:steps].last.robot
       assert_match "${file.ext}", assembly.options[:steps].last.options[:path]
 
-      assembly = @uploader.transloadit_assembly(file: file)
+      assembly = @store.transloadit_assembly(file: file)
       assert_equal 2,             assembly.options[:steps].count
       assert_equal "export_file", assembly.options[:steps].last.name
       assert_equal "/s3/store",   assembly.options[:steps].last.robot
@@ -217,73 +205,77 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "doesn't add an export step if it's given" do
-      file = @uploader.transloadit_file
+      file = @store.transloadit_file
         .add_step("import", "/http/import")
         .add_step("my_export", "/s3/store")
 
-      assembly = @uploader.transloadit_assembly(file)
+      assembly = @store.transloadit_assembly(file)
       assert_equal 2,           assembly.options[:steps].count
       assert_equal "my_export", assembly.options[:steps].last.name
 
-      assembly = @uploader.transloadit_assembly(file: file)
+      assembly = @store.transloadit_assembly(file: file)
       assert_equal 2,           assembly.options[:steps].count
       assert_equal "my_export", assembly.options[:steps].last.name
     end
 
     it "complains when there are duplicate step names" do
-      file = @uploader.transloadit_file
+      file = @store.transloadit_file
         .add_step("import", "/s3/import", foo: "foo")
         .add_step("import", "/s3/import", bar: "bar")
 
-      assert_raises(Shrine::Error) { @uploader.transloadit_assembly(file) }
+      assert_raises(Shrine::Error) { @store.transloadit_assembly(file) }
     end
 
     it "complains when there are no steps defined on a TransloaditFile" do
       assert_raises(Shrine::Error) do
-        @uploader.transloadit_assembly(@uploader.transloadit_file)
+        @store.transloadit_assembly(@store.transloadit_file)
       end
 
       assert_raises(Shrine::Error) do
-        @uploader.transloadit_assembly(file: @uploader.transloadit_file)
+        @store.transloadit_assembly(file: @store.transloadit_file)
       end
     end
 
     it "complains when the import step is missing" do
-      file = @uploader.transloadit_file
+      file = @store.transloadit_file
         .add_step("resize", "/image/resize")
         .add_step("export", "/s3/store")
 
-      assert_raises(Shrine::Error) { @uploader.transloadit_assembly(file) }
+      assert_raises(Shrine::Error) { @store.transloadit_assembly(file) }
     end
   end
 
-  describe Shrine::Plugins::Transloadit::TransloaditFile do
-    before do
-      @transloadit_file = @attacher.store.transloadit_file
-    end
-
+  describe "#transloadit_file" do
     describe "#add_step" do
       it "creates a new instance" do
-        new_file = @transloadit_file.add_step("import", "/http/import")
+        transloadit_file = @store.transloadit_file
+        new_file = transloadit_file.add_step("import", "/http/import")
         assert_equal 1, new_file.steps.count
-        assert_equal 0, @transloadit_file.steps.count
+        assert_equal 0, transloadit_file.steps.count
       end
 
       it "accepts both step arguments and steps itself" do
-        file = @transloadit_file.add_step("import", "/http/import")
+        file = @store.transloadit_file.add_step("import", "/http/import")
         assert_instance_of Transloadit::Step, file.steps[0]
 
-        file = @transloadit_file.add_step(@transloadit_file.transloadit.step("import", "/http/import"))
+        file = @store.transloadit_file.add_step(@store.transloadit.step("import", "/http/import"))
         assert_instance_of Transloadit::Step, file.steps[0]
       end
 
       it "automatically adds :use for previous step" do
-        file = @transloadit_file
+        file = @store.transloadit_file
           .add_step("import", "/http/import")
           .add_step("export", "/http/store")
 
         assert_equal nil,        file.steps[0].options[:use]
         assert_equal ["import"], file.steps[1].options[:use]
+      end
+
+      it "generates import step for passed UploadedFile" do
+        file = @store.transloadit_file(@cached_file)
+
+        assert_equal 1, file.steps.count
+        assert_equal "/s3/import", file.steps[0].robot
       end
     end
   end
@@ -311,7 +303,7 @@ describe Shrine::Plugins::Transloadit do
   end
 
   it "propagates Transloadit errors" do
-    @attacher.shrine_class.class_eval do
+    @store.class.class_eval do
       def transloadit_process(io, context)
         transloadit.assembly({})
       end
@@ -320,11 +312,11 @@ describe Shrine::Plugins::Transloadit do
   end
 
   it "keeps the same transloadit client on the uploader instance" do
-    assert_equal @attacher.store.transloadit, @attacher.store.transloadit
+    assert_equal @store.transloadit, @store.transloadit
   end
 
   it "creates a new transloadit client for each uploader instance" do
-    refute_equal @attacher.shrine_class.transloadit, @attacher.shrine_class.transloadit
+    refute_equal @store.class.transloadit, @store.class.transloadit
   end
 
   def wait_for_response(response)
