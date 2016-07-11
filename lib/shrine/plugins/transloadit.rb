@@ -1,10 +1,8 @@
 require "transloadit"
-require "down"
 
 require "uri"
 require "json"
 require "openssl"
-require "net/http"
 
 class Shrine
   module Plugins
@@ -23,7 +21,11 @@ class Shrine
         raise Error, "The :auth_key is required for transloadit plugin" if uploader.opts[:transloadit_auth_key].nil?
         raise Error, "The :auth_secret is required for transloadit plugin" if uploader.opts[:transloadit_auth_secret].nil?
 
-        uploader.storages[:cache] ||= UrlStorage.new
+        uploader.storages[:cache] ||= (
+          require "shrine/storage/url"
+          Shrine::Storage::Url.new
+        )
+
         uploader.opts[:backgrounding_promote] ||= proc { transloadit_process }
       end
 
@@ -350,27 +352,6 @@ class Shrine
         # Returns true if this TransloaditFile includes an export step.
         def exported?
           @steps.any? && @steps.last.robot.end_with?("/store")
-        end
-      end
-
-      class UrlStorage
-        def download(id)
-          Down.download(id)
-        end
-
-        def open(id)
-          Down.open(id)
-        end
-
-        def exists?(id)
-          response = nil
-          uri = URI(id)
-          Net::HTTP.start(uri.host, uri.port) { |http| response = http.head(id) }
-          response.code.to_i == 200
-        end
-
-        def url(id, **options)
-          id
         end
       end
     end

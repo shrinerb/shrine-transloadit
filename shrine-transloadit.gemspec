@@ -15,7 +15,7 @@ Gem::Specification.new do |gem|
 
   gem.add_dependency "shrine", "~> 2.1"
   gem.add_dependency "transloadit", "~> 1.2"
-  gem.add_dependency "down", ">= 2.3.3"
+  gem.add_dependency "shrine-url"
 
   gem.add_development_dependency "rake"
   gem.add_development_dependency "minitest"
