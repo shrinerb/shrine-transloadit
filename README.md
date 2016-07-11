@@ -107,29 +107,20 @@ class MyUploader < Shrine
 end
 ```
 
-### Webhooks
+### Direct uploads
 
-Transloadit performs its processing asynchronously, and you can provide a URL
-where you want Transloadit to POST results of processing once it's finished.
+Transloadit supports direct uploads, allowing you to do additional processing
+on upload, along with a [jQuery plugin] for easy integration. Generally you
+only want to do some light processing on direct uploads, and without any
+exporting, so that you have better control over your Transloadit bandwidth.
 
-```rb
-class MyUploader < Shrine
-  def transloadit_process(io, context)
-    # ...
+When direct upload finishes, Transloadit returns information about the uploaded
+file(s). You can just convert that data to a JSON string and pass it as attachment
+value (e.g. by assigning it to the hidden attachment field), and the plugin
+will automatically recognize it and convert it to Shrine's attachment
+representation.
 
-    transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
-  end
-end
-```
-
-Then in your `POST /webhooks/transloadit` route you can call the plugin to
-automatically save the results to the attachment column in Shrine's format.
-
-```rb
-post "/webhooks/transloadit" do
-  Shrine::Attacher.transloadit_save(params)
-end
-```
+See the **[demo app]** for a complete implementation of direct uploads.
 
 ### Templates
 
@@ -163,10 +154,34 @@ class MyUploader < Shrine
 end
 ```
 
+### Webhooks
+
+Transloadit performs its processing asynchronously, and you can provide a URL
+where you want Transloadit to POST results of processing once it's finished.
+
+```rb
+class MyUploader < Shrine
+  def transloadit_process(io, context)
+    # ...
+
+    transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
+  end
+end
+```
+
+Then in your `POST /webhooks/transloadit` route you can call the plugin to
+automatically save the results to the attachment column in Shrine's format.
+
+```rb
+post "/webhooks/transloadit" do
+  Shrine::Attacher.transloadit_save(params)
+end
+```
+
 ### Backgrounding
 
 Even though submitting a Transloadit assembly doesn't require any uploading, it
-still does two HTTP requests, so you might want to put it into a backgrond job.
+still does two HTTP requests, so you might want to put it into a background job.
 This plugin naturally hooks onto Shrine's backgrounding plugin:
 
 ```rb
@@ -212,20 +227,35 @@ response.reload!
 response.finished? #=> true
 ```
 
-### Direct uploads
+### Metadata
 
-Transloadit supports direct uploads, allowing you to do additional processing
-on upload, along with a [jQuery plugin] for easy integration. Generally you
-only want to do some light processing on direct uploads, and without any
-exporting, so that you have better control over your Transloadit bandwidth.
+For each processed file Transloadit also extracts a great deal of useful
+metadata. When the Transloadit processing is finished and the results are saved
+as a Shrine attachment, this metadata will be automatically used to populate
+the attachment's metadata.
 
-When direct upload finishes, Transloadit returns information about the uploaded
-file(s). You can just convert that data to a JSON string and pass it as attachment
-value (e.g. by assigning it to the hidden attachment field), and the plugin
-will automatically recognize it and convert it to Shrine's attachment
-representation.
+Additionally the Transloadit's metadata hash will be saved in an additional
+metadata key, so that you can access any other values:
 
-See the **[demo app]** for a complete implementation of direct uploads.
+```rb
+photo = Photo.create(image: image_file)
+photo.image.metadata["transloadit"] #=>
+# {
+#   "date_recorded"         => "2013/09/04 08:03:39",
+#   "date_file_created"     => "2013/09/04 12:03:39 GMT",
+#   "date_file_modified"    => "2016/07/11 02:27:11 GMT",
+#   "aspect_ratio"          => "1.504",
+#   "city"                  => "Decatur",
+#   "state"                 => "Georgia",
+#   "country"               => "United States",
+#   "latitude"              => 33.77519301,
+#   "longitude"             => -84.295608,
+#   "orientation"           => "Horizontal (normal)",
+#   "colorspace"            => "RGB",
+#   "average_color"         => "#8b8688",
+#   ...
+# }
+```
 
 ### Import & Export
 
