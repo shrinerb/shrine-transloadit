@@ -117,22 +117,6 @@ class Shrine
             _delete(stored_file, phase: :abort)
           end
         end
-
-        # When doing direct uploads this allows you to send an uploaded file
-        # in Transloadit's representation, and it will automatically be
-        # converted to Shrine's representation.
-        def uploaded_file(value)
-          if value.is_a?(String) || value.is_a?(Hash)
-            value = JSON.parse(value) if value.is_a?(String)
-            if value["url"].is_a?(String) # from direct upload
-              cache.transloadit_uploaded_file(value)
-            else
-              super
-            end
-          else
-            super
-          end
-        end
       end
 
       module ClassMethods
@@ -157,9 +141,8 @@ class Shrine
         # expected that the URL storage is used.
         def transloadit_uploaded_file(result)
           case url = result.fetch("url")
-          when /tmp\.transloadit\.com/
-            id = url
           when /amazonaws\.com/
+            raise Error, "Cannot save a processed file which wasn't exported: #{url.inspect}" if url.include?("tmp.transloadit.com")
             path = URI(url).path
             id = path.match(/^\/#{storage.prefix}/).post_match
           else
