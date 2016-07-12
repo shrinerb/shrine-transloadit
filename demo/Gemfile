@@ -9,6 +9,7 @@ gem "sqlite3"
 
 gem "shrine"
 gem "shrine-transloadit", path: ".."
+gem "shrine-url"
 gem "aws-sdk", "~> 2.1"
 gem "dotenv"
 

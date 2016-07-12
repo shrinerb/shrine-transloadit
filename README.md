@@ -8,40 +8,41 @@ to various file storage services.
 
 ## Setup
 
-While Transloadit is able to export processed files to [many storage
-services], this plugin currently supports only Amazon S3 (just because there
-are no Shrine integrations written for other services on that list yet).
+While Transloadit is able to export processed files to [many storage services],
+this plugin currently supports only Amazon S3 (just because there are no Shrine
+integrations written for other services on that list yet). You can just add
+shrine-transloadit to your current setup:
 
 ```rb
+gem "shrine"
+gem "aws-sdk" # for Amazon S3
 gem "shrine-transloadit"
-gem "aws-sdk"
 ```
 
 ```rb
 require "shrine"
 require "shrine/storage/s3"
 
-Shrine.plugin :transloadit,
-  auth_key:    "your transloadit key",
-  auth_secret: "your transloadit secret"
-
-Shrine.storages[:store] = Shrine::Storage::S3.new(
-  access_key_id: "xyz",
-  secret_access_key: "abc",
+s3_options = {
+  bucket: "my-bucket",
   region: "my-region",
-  bucket: "my-app",
-)
+  access_key_id: "abc",
+  secret_access_key: "xyz",
+}
+
+Shrine.storages = {
+  cache: Shrine::Storage::S3.new(prefix: "cache", **s3_options),
+  store: Shrine::Storage::S3.new(prefix: "store", **s3_options),
+}
+
+Shrine.plugin :transloadit,
+  auth_key: "your transloadit key",
+  auth_secret: "your transloadit secret"
 ```
 
-```rb
-post "/webhooks/transloadit" do
-  Shrine::Attacher.transloadit_save(params)
-end
-```
-
-This setup assumes you want to do [direct uploads](#direct-uploads) to
-Transloadit. This is completely optional, the plugin will work equally well
-with whatever your `:cache` storage is.
+This setup assumes you're doing direct S3 uploads, but you can also do [direct
+uploads to Transloadit], or just use any other `:cache` storage which provides
+URLs for uploaded files.
 
 ## How it works
 
@@ -115,9 +116,22 @@ only want to do some light processing on direct uploads, and without any
 exporting, so that you have better control over your Transloadit bandwidth.
 
 When direct upload finishes, Transloadit returns information about the uploaded
-file(s). The default `:cache` storage allows you to store Transloadit's
-temporary file URL as an attachment. This means that you can use the following
-JavaScript to convert Transloadit's data hash into Shrine's format:
+file(s), one of which is a temporary URL to the file. You want to save this URL
+as cached attachment, so that you can display it to the user and use it for
+further Transloadit processing. You can do that using [shrine-url]:
+
+```rb
+gem "shrine-url"
+```
+
+```rb
+require "shrine/storage/url"
+Shrine.storages[:cache] = Shrine::Storage::Url.new
+```
+
+Now when you obtain results from finished direct uploads on the client-side,
+you need to transform the Transloadit hash into Shrine's uploaded file
+representation, using the URL as the "id":
 
 ```js
 {
@@ -407,3 +421,5 @@ $ bundle exec rake test
 [templates]: https://transloadit.com/docs/#templates
 [jQuery plugin]: https://github.com/transloadit/jquery-sdk
 [demo app]: /demo
+[direct uploads to Transloadit]: #direct-uploads
+[shrine-url]: https://github.com/janko-m/shrine-url

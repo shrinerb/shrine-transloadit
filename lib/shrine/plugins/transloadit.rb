@@ -21,11 +21,6 @@ class Shrine
         raise Error, "The :auth_key is required for transloadit plugin" if uploader.opts[:transloadit_auth_key].nil?
         raise Error, "The :auth_secret is required for transloadit plugin" if uploader.opts[:transloadit_auth_secret].nil?
 
-        uploader.storages[:cache] ||= (
-          require "shrine/storage/url"
-          Shrine::Storage::Url.new
-        )
-
         uploader.opts[:backgrounding_promote] ||= proc { transloadit_process }
       end
 
