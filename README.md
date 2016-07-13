@@ -108,6 +108,30 @@ class MyUploader < Shrine
 end
 ```
 
+### Webhooks
+
+Transloadit performs its processing asynchronously, and you can provide a URL
+where you want Transloadit to POST results of processing once it's finished.
+
+```rb
+class MyUploader < Shrine
+  def transloadit_process(io, context)
+    # ...
+
+    transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
+  end
+end
+```
+
+Then in your `POST /webhooks/transloadit` route you can call the plugin to
+automatically save the results to the attachment column in Shrine's format.
+
+```rb
+post "/webhooks/transloadit" do
+  Shrine::Attacher.transloadit_save(params)
+end
+```
+
 ### Direct uploads
 
 Transloadit supports direct uploads, allowing you to do additional processing
@@ -179,30 +203,6 @@ class MyUploader < Shrine
   def transloadit_process(io, context)
     transloadit_assembly("my_template", steps: {import: {url: io.url}})
   end
-end
-```
-
-### Webhooks
-
-Transloadit performs its processing asynchronously, and you can provide a URL
-where you want Transloadit to POST results of processing once it's finished.
-
-```rb
-class MyUploader < Shrine
-  def transloadit_process(io, context)
-    # ...
-
-    transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
-  end
-end
-```
-
-Then in your `POST /webhooks/transloadit` route you can call the plugin to
-automatically save the results to the attachment column in Shrine's format.
-
-```rb
-post "/webhooks/transloadit" do
-  Shrine::Attacher.transloadit_save(params)
 end
 ```
 
