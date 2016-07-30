@@ -13,7 +13,7 @@ Gem::Specification.new do |gem|
   gem.files        = Dir["README.md", "LICENSE.txt", "lib/**/*.rb", "*.gemspec"]
   gem.require_path = "lib"
 
-  gem.add_dependency "shrine", "~> 2.1"
+  gem.add_dependency "shrine", "~> 2.2"
   gem.add_dependency "transloadit", "~> 1.2"
 
   gem.add_development_dependency "rake"

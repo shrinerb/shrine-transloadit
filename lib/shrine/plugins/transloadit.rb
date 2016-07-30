@@ -109,7 +109,7 @@ class Shrine
           if valid
             swap(stored_file)
           else
-            _delete(stored_file, phase: :abort)
+            _delete(stored_file, action: :abort)
           end
         end
       end
