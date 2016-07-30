@@ -14,7 +14,7 @@ class TransloaditDemo < Roda
   plugin :all_verbs
 
   use Rack::Session::Cookie, secret: "secret"
-  plugin :csrf, raise: true
+  plugin :csrf, raise: true, skip: ["POST:/webhooks/transloadit"]
 
   plugin :indifferent_params
 

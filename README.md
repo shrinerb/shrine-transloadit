@@ -132,6 +132,9 @@ post "/webhooks/transloadit" do
 end
 ```
 
+Note that if you have CSRF protection, make sure that you skip verifying the
+CSRF token for this route.
+
 ### Direct uploads
 
 Transloadit supports direct uploads, allowing you to do additional processing
