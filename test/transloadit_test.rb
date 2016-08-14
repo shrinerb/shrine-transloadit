@@ -113,7 +113,7 @@ describe Shrine::Plugins::Transloadit do
       assert_equal ENV.fetch("S3_SECRET_ACCESS_KEY"), import.options[:secret]
       assert_equal ENV.fetch("S3_BUCKET"),            import.options[:bucket]
       assert_equal ENV.fetch("S3_REGION"),            import.options[:bucket_region]
-      assert_equal uploaded_file.id,                  import.options[:path]
+      assert_equal "store/#{uploaded_file.id}",       import.options[:path]
     end
 
     it "accepts other files over HTTP/HTTPS" do
@@ -168,7 +168,7 @@ describe Shrine::Plugins::Transloadit do
     it "accepts additional step options" do
       uploaded_file = @cached_file.dup
       export = @store.transloadit_export_step("export", path: "foo")
-      assert_equal "foo", export.options[:path]
+      assert_equal "store/foo", export.options[:path]
     end
   end
 

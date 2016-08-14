@@ -139,7 +139,7 @@ class Shrine
           when /amazonaws\.com/
             raise Error, "Cannot save a processed file which wasn't exported: #{url.inspect}" if url.include?("tmp.transloadit.com")
             path = URI(url).path
-            id = path.match(/^\/#{storage.prefix}/).post_match
+            id = path.match(%r{^(/#{storage.prefix})?/}).post_match
           else
             raise Error, "The transloadit Shrine plugin doesn't support storage identified by #{url.inspect}"
           end
@@ -194,13 +194,16 @@ class Shrine
 
         # Generates an export step from the current (permanent) storage.
         # At the moment only Amazon S3 is supported.
-        def transloadit_export_step(name, **step_options)
+        def transloadit_export_step(name, path: nil, **step_options)
           if defined?(Storage::S3) && storage.is_a?(Storage::S3)
+            path ||= "${unique_prefix}/${file.url_name}" # Transloadit's default path
+
             step = transloadit.step(name, "/s3/store",
               key:           storage.s3.client.config.access_key_id,
               secret:        storage.s3.client.config.secret_access_key,
               bucket:        storage.bucket.name,
-              bucket_region: storage.s3.client.config.region
+              bucket_region: storage.s3.client.config.region,
+              path:          [*storage.prefix, path].join("/"),
             )
           else
             raise Error, "Cannot construct a transloadit export step from #{storage.inspect}"
