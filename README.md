@@ -228,8 +228,8 @@ class TransloaditJob
 end
 ```
 
-You can register regular backgrounding globally, and then swap the regular
-promoting with Transloadit processing per uploader:
+You can setup regular promoting globally, and then apply Transloadit processing
+only for specific uploaders:
 
 ```rb
 Shrine::Attacher.promote { |data| PromoteJob.perform_async(data) }
