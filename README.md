@@ -212,8 +212,8 @@ end
 ### Backgrounding
 
 Even though submitting a Transloadit assembly doesn't require any uploading, it
-still does two HTTP requests, so you might want to put it into a background job.
-This plugin naturally hooks onto Shrine's backgrounding plugin:
+still does two HTTP requests, so you might want to put them into a background
+job. This plugin naturally hooks onto Shrine's backgrounding plugin:
 
 ```rb
 Shrine::Attacher.promote { |data| TransloaditJob.perform_async(data) }
@@ -225,6 +225,19 @@ class TransloaditJob
   def perform(data)
     Shrine::Attacher.transloadit_process(data)
   end
+end
+```
+
+You can register regular backgrounding globally, and then swap the regular
+promoting with Transloadit processing per uploader:
+
+```rb
+Shrine::Attacher.promote { |data| PromoteJob.perform_async(data) }
+Shrine::Attacher.delete { |data| DeleteJob.perform_async(data) }
+```
+```rb
+class VideoUploader < Shrine
+  Attacher.promote { |data| TransloaditJob.perform_async(data) }
 end
 ```
 
