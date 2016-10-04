@@ -129,6 +129,7 @@ automatically save the results to the attachment column in Shrine's format.
 ```rb
 post "/webhooks/transloadit" do
   Shrine::Attacher.transloadit_save(params)
+  # return 200 status
 end
 ```
 
@@ -186,7 +187,7 @@ Here is an example where the whole processing is defined inside a template,
 and we just set the location of the imported file.
 
 ```rb
-# Your saved template
+# Your Transloadit template saved as "my_template"
 {
   steps: {
     import: {
