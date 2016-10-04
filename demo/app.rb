@@ -42,6 +42,7 @@ class TransloaditDemo < Roda
     # This is used only in production.
     r.post "webhooks/transloadit" do
       Shrine::Attacher.transloadit_save(params)
+      response.write("") # returns empty 200 status
     end
   end
 end
