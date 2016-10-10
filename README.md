@@ -143,6 +143,24 @@ on upload, along with a [jQuery plugin] for easy integration. Generally you
 only want to do some light processing on direct uploads, and without any
 exporting, so that you have better control over your Transloadit bandwidth.
 
+```js
+# Using https://github.com/transloadit/jquery-sdk
+$("#upload-form").transloadit({
+  wait: true,
+  params: {
+    auth: {key: "YOUR_TRANSLOADIT_AUTH_KEY"},
+    steps: {
+      extract_thumbnails: {
+        robot:  "/video/thumbs",
+        use:    ":original",
+        count:  8,
+        format: "png",
+      }
+    }
+  }
+});
+```
+
 When direct upload finishes, Transloadit returns information about the uploaded
 file(s), one of which is a temporary URL to the file. You want to save this URL
 as cached attachment, so that you can display it to the user and use it for
@@ -175,6 +193,9 @@ representation, using the URL as the "id":
   }
 }
 ```
+
+If the result of direct upload processing are multiple files (e.g. video
+thumbnails), you need to assign them to individual records.
 
 See the **[demo app]** for a complete implementation of direct uploads.
 
