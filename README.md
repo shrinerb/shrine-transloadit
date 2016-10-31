@@ -35,9 +35,11 @@ Shrine.storages = {
   store: Shrine::Storage::S3.new(prefix: "store", **s3_options),
 }
 
-Shrine.plugin :transloadit,
-  auth_key: "your transloadit key",
-  auth_secret: "your transloadit secret"
+class TransloaditUploader < Shrine
+  plugin :transloadit,
+    auth_key: "your transloadit key",
+    auth_secret: "your transloadit secret"
+end
 ```
 
 This setup assumes you're doing direct S3 uploads, but you can also do [direct
@@ -62,12 +64,16 @@ as a good baseline for your own implementation.
 
 ## Usage
 
+We loaded the `transloadit` plugin in a `TransloaditUploader` base uploader
+class, so that any uploaders that you want to do Transloadit processing with
+can just inherit from that class.
+
 Transloadit assemblies are built inside `#transloadit_process` method in your
 uploader, and you can use some convenient helper methods which the plugin
 provides.
 
 ```rb
-class MyUploader < Shrine
+class ImageUploader < TransloaditUploader # inherit from our Transloadit base uploader class
   def transloadit_process(io, context)
     resized = transloadit_file(io)
       .add_step("resize", "/image/resize", width: 800)
@@ -93,7 +99,7 @@ With Transloadit you can create multiple files in a single assembly, and this
 plugin allows you to leverage that in form of a hash of versions.
 
 ```rb
-class MyUploader < Shrine
+class ImageUploader < TransloaditUploader
   plugin :versions
 
   def transloadit_process(io, context)
@@ -114,10 +120,9 @@ Transloadit performs its processing asynchronously, and you can provide a URL
 where you want Transloadit to POST results of processing once it's finished.
 
 ```rb
-class MyUploader < Shrine
+class ImageUploader < TransloaditUploader
   def transloadit_process(io, context)
     # ...
-
     transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
   end
 end
@@ -128,7 +133,7 @@ automatically save the results to the attachment column in Shrine's format.
 
 ```rb
 post "/webhooks/transloadit" do
-  Shrine::Attacher.transloadit_save(params)
+  TransloaditUploader::Attacher.transloadit_save(params)
   # return 200 status
 end
 ```
@@ -144,7 +149,7 @@ only want to do some light processing on direct uploads, and without any
 exporting, so that you have better control over your Transloadit bandwidth.
 
 ```js
-# Using https://github.com/transloadit/jquery-sdk
+// Using https://github.com/transloadit/jquery-sdk
 $("#upload-form").transloadit({
   wait: true,
   params: {
@@ -211,22 +216,28 @@ and we just set the location of the imported file.
 # Your Transloadit template saved as "my_template"
 {
   steps: {
-    import: {
-      robot: "/http/import",
-      url: "..."
-    },
     resize: {
       robot: "/image/resize",
-      use: "import",
+      use: "import", # the "import" step will be passed in
       width: 800
+    },
+    export: {
+      robot: "/s3/store",
+      use: "resize",
+      bucket: "YOUR_AWS_BUCKET",
+      key: "YOUR_AWS_KEY",
+      secret: "YOUR_AWS_SECRET",
+      bucket_region: "YOUR_AWS_REGION",
+      path: "videos/${unique_prefix}/${file.url_name}"
     }
   }
 }
 ```
 ```rb
-class MyUploader < Shrine
+class ImageUplaoder < TransloaditUploader
   def transloadit_process(io, context)
-    transloadit_assembly("my_template", steps: {import: {url: io.url}})
+    import = transloadit_import_step("import", io)
+    transloadit_assembly("my_template", steps: [import])
   end
 end
 ```
@@ -235,31 +246,24 @@ end
 
 Even though submitting a Transloadit assembly doesn't require any uploading, it
 still does two HTTP requests, so you might want to put them into a background
-job. This plugin naturally hooks onto Shrine's backgrounding plugin:
+job. You can configure that in the `TransloaditUploader` base uploader class:
 
 ```rb
-Shrine::Attacher.promote { |data| TransloaditJob.perform_async(data) }
+class TransloaditUploader < Shrine
+  plugin :transloadit,
+    auth_key: "your transloadit key",
+    auth_secret: "your transloadit secret"
+
+  Attacher.promote { |data| TransloaditJob.perform_async(data) }
+end
 ```
 ```rb
 class TransloaditJob
   include Sidekiq::Worker
 
   def perform(data)
-    Shrine::Attacher.transloadit_process(data)
+    TransloaditUploader::Attacher.transloadit_process(data)
   end
-end
-```
-
-You can setup regular promoting globally, and then apply Transloadit processing
-only for specific uploaders:
-
-```rb
-Shrine::Attacher.promote { |data| PromoteJob.perform_async(data) }
-Shrine::Attacher.delete { |data| DeleteJob.perform_async(data) }
-```
-```rb
-class VideoUploader < Shrine
-  Attacher.promote { |data| TransloaditJob.perform_async(data) }
 end
 ```
 
@@ -359,9 +363,9 @@ your steps, it only requires you to return an instance of
 `Transloadit::Assembly`.
 
 ```rb
-class MyUploader < Shrine
+class MyUploader < TransloaditUploader
   def transloadit_process(io, context)
-    # build options
+    # ...
     transloadit #=> #<Transloadit>
     transloadit.assembly(options)
   end
@@ -372,7 +376,7 @@ The import/export helper methods simply generate a `Transloadit::Step` object,
 and you can pass additional options:
 
 ```rb
-class MyUploader < Shrinee
+class MyUploader < TransloaditUploader
   def transloadit_process(io, context)
     transloadit_import_step("import", io)             #=> #<Transloadit::Step>
     transloadit_export_step("export", path: "mypath") #=> #<Transloadit::Step>
@@ -390,7 +394,7 @@ as an external service cannot access your localhost. In this case you can just
 do polling:
 
 ```rb
-class MyUploader < Shrine
+class MyUploader < TransloaditUploader
   def transloadit_process(io, context)
     # ...
 
@@ -411,7 +415,7 @@ class TransloaditJob
   include Sidekiq::Worker
 
   def perform(data)
-    attacher = Shrine::Attacher.transloadit_process(data)
+    attacher = TransloaditUploader::Attacher.transloadit_process(data)
 
     # Webhooks won't work in development, so we can just use polling.
     unless ENV["RACK_ENV"] == "production"
