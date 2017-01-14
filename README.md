@@ -420,10 +420,7 @@ class TransloaditJob
     # Webhooks won't work in development, so we can just use polling.
     unless ENV["RACK_ENV"] == "production"
       response = attacher.get.transloadit_response
-      until response.finished?
-        sleep 1
-        response.reload!
-      end
+      response.reload_until_finished!
       attacher.transloadit_save(response.body)
     end
   end

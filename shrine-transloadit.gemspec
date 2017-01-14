@@ -14,7 +14,7 @@ Gem::Specification.new do |gem|
   gem.require_path = "lib"
 
   gem.add_dependency "shrine", "~> 2.2"
-  gem.add_dependency "transloadit", "~> 1.2"
+  gem.add_dependency "transloadit", "~> 2.0"
 
   gem.add_development_dependency "rake"
   gem.add_development_dependency "minitest"

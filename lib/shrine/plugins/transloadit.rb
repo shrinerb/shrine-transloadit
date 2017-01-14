@@ -81,7 +81,7 @@ class Shrine
           assembly = store.transloadit_process(cached_file, context)
           assembly.options[:fields] ||= {}
           assembly.options[:fields]["attacher"] = self.dump.merge("attachment" => cached_file.to_json)
-          response = assembly.submit!
+          response = assembly.create!
           raise Error, "#{response["error"]}: #{response["message"]}" if response["error"]
           cached_file.metadata["transloadit_response"] = response.body.to_json
           swap(cached_file) or _set(cached_file)
