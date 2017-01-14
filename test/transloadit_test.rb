@@ -27,7 +27,6 @@ describe Shrine::Plugins::Transloadit do
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
-    assert response.completed?
     @attacher.transloadit_save(response.body)
 
     assert_equal "store", @record.attachment.storage_key
@@ -44,7 +43,6 @@ describe Shrine::Plugins::Transloadit do
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
-    assert response.completed?
     @attacher.transloadit_save(response.body)
 
     assert_instance_of Hash, @record.attachment
@@ -64,7 +62,6 @@ describe Shrine::Plugins::Transloadit do
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
-    assert response.completed?
 
     body = RestClient.get(response["notify_url"]).body
     params = CGI.parse(body)
@@ -309,14 +306,22 @@ describe Shrine::Plugins::Transloadit do
   end
 
   def wait_for_response(response)
-    loop do
-      if response["notify_url"]
-        break if response["notify_status"]
-      else
-        break if response.finished?
-      end
-      sleep 1
-      response.reload!
+    response.reload_until_finished!
+
+    if response.error?
+      raise "Assembly errored with: #{response["error"]}\nAssembly: #{response}"
     end
+
+    if response["notify_url"]
+      loop do
+        notifications = JSON.parse(transloadit.assembly.get_notifications.to_s)["items"]
+        break if notifications.any? && notifications.first["assembly_id"] == response["assembly_id"]
+        sleep 1
+      end
+    end
+  end
+
+  def transloadit
+    @store.transloadit
   end
 end
