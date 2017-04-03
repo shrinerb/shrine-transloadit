@@ -42,7 +42,7 @@ class Minitest::Test
   def setup
     shrine_class = Class.new(Shrine)
     Object.const_set(:Record, Sequel::Model(:records))
-    Record.include shrine_class[:attachment]
+    Record.include shrine_class::Attachment.new(:attachment)
     @record = Record.new
     super
   end
