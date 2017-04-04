@@ -166,10 +166,10 @@ class Shrine
 
           if defined?(Storage::S3) && io.storage.is_a?(Storage::S3)
             step = transloadit.step(name, "/s3/import",
-              key:           io.storage.s3.client.config.access_key_id,
-              secret:        io.storage.s3.client.config.secret_access_key,
+              key:           io.storage.client.config.access_key_id,
+              secret:        io.storage.client.config.secret_access_key,
               bucket:        io.storage.bucket.name,
-              bucket_region: io.storage.s3.client.config.region,
+              bucket_region: io.storage.client.config.region,
               path:          [*io.storage.prefix, io.id].join("/"),
             )
           elsif uri.scheme == "http" || uri.scheme == "https"
@@ -199,10 +199,10 @@ class Shrine
             path ||= "${unique_prefix}/${file.url_name}" # Transloadit's default path
 
             step = transloadit.step(name, "/s3/store",
-              key:           storage.s3.client.config.access_key_id,
-              secret:        storage.s3.client.config.secret_access_key,
+              key:           storage.client.config.access_key_id,
+              secret:        storage.client.config.secret_access_key,
               bucket:        storage.bucket.name,
-              bucket_region: storage.s3.client.config.region,
+              bucket_region: storage.client.config.region,
               path:          [*storage.prefix, path].join("/"),
             )
           else
