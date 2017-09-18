@@ -7,10 +7,10 @@ gem "rack_csrf"
 gem "sequel"
 gem "sqlite3"
 
-gem "shrine"
+gem "shrine", "~> 2.7"
 gem "shrine-transloadit", path: ".."
 gem "shrine-url"
-gem "aws-sdk", "~> 2.1"
+gem "aws-sdk-s3", "~> 1.2"
 gem "dotenv"
 
 gem "sucker_punch", "~> 2.0"

@@ -20,7 +20,7 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "minitest"
   gem.add_development_dependency "minitest-hooks"
   gem.add_development_dependency "dotenv"
-  gem.add_development_dependency "aws-sdk"
+  gem.add_development_dependency "aws-sdk-s3", "~> 1.2"
   gem.add_development_dependency "sequel"
   gem.add_development_dependency "sqlite3"
 end
