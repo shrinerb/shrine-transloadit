@@ -18,8 +18,8 @@ Dotenv.load!
 Shrine.plugin :sequel
 Shrine.plugin :versions
 Shrine.plugin :transloadit,
-  auth_key:    ENV.fetch("TRANSLOADIT_AUTH_KEY"),
-  auth_secret: ENV.fetch("TRANSLOADIT_AUTH_SECRET")
+  auth_key:    ENV.fetch("TRANSLOADIT_KEY"),
+  auth_secret: ENV.fetch("TRANSLOADIT_SECRET")
 
 s3 = Shrine::Storage::S3.new(
   bucket:            ENV.fetch("S3_BUCKET"),
