@@ -1,8 +1,7 @@
 require "test_helper"
-require "net/http"
 
 print "Waking up http://echo-webhook.herokuapp.com... "
-Net::HTTP.get(URI("http://echo-webhook.herokuapp.com"))
+RestClient.get("http://echo-webhook.herokuapp.com") rescue nil
 puts "Done"
 
 describe Shrine::Plugins::Transloadit do

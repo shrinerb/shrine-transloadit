@@ -11,6 +11,7 @@ require "shrine"
 require "shrine/storage/s3"
 
 require "dotenv"
+require "rest-client"
 
 Dotenv.load!
 
