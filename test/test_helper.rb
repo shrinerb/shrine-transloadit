@@ -36,7 +36,7 @@ DB.create_table :records do
   column :attachment_data, :text
 end
 
-Sequel.cache_anonymous_models = false
+Sequel::Model.cache_anonymous_models = false
 
 class Minitest::Test
   def setup
