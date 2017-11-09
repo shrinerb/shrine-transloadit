@@ -7,6 +7,8 @@ require "openssl"
 class Shrine
   module Plugins
     module Transloadit
+      Error = Class.new(Shrine::Error)
+
       # Accepts Transloadit credentials via `:auth_key` and `:auth_secret`.
       #
       # If :cache storage wasn't assigned, it will be assigned to a URL storage

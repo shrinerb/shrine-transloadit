@@ -225,15 +225,15 @@ describe Shrine::Plugins::Transloadit do
         .add_step("import", "/s3/import", foo: "foo")
         .add_step("import", "/s3/import", bar: "bar")
 
-      assert_raises(Shrine::Error) { @store.transloadit_assembly(file) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
     end
 
     it "complains when there are no steps defined on a TransloaditFile" do
-      assert_raises(Shrine::Error) do
+      assert_raises(Shrine::Plugins::Transloadit::Error) do
         @store.transloadit_assembly(@store.transloadit_file)
       end
 
-      assert_raises(Shrine::Error) do
+      assert_raises(Shrine::Plugins::Transloadit::Error) do
         @store.transloadit_assembly(file: @store.transloadit_file)
       end
     end
@@ -243,7 +243,7 @@ describe Shrine::Plugins::Transloadit do
         .add_step("resize", "/image/resize")
         .add_step("export", "/s3/store")
 
-      assert_raises(Shrine::Error) { @store.transloadit_assembly(file) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
     end
   end
 
@@ -294,7 +294,7 @@ describe Shrine::Plugins::Transloadit do
         transloadit.assembly({})
       end
     end
-    assert_raises(Shrine::Error) { @attacher.transloadit_process(@cached_file) }
+    assert_raises(Shrine::Plugins::Transloadit::Error) { @attacher.transloadit_process(@cached_file) }
   end
 
   it "keeps the same transloadit client on the uploader instance" do
