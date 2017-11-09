@@ -2,9 +2,10 @@
 
 Provides [Transloadit] integration for [Shrine].
 
-Transloadit offers advanced file processing for all sorts of media, including
-images, videos, audio, and documents, along with importing from and exporting
-to various file storage services.
+Transloadit is a service that helps you handles file uploads, resize, crop and
+watermark your images, make GIFs, transcode your videos, extract thumbnails,
+generate audio waveforms, and so much more. In short, Transloadit is the Swiss
+Army Knife for your files.
 
 ## Setup
 
