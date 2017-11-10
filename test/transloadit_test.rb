@@ -6,7 +6,8 @@ puts "Done"
 
 describe Shrine::Plugins::Transloadit do
   around(:all) do |&block|
-    @cached_file = Shrine.new(:cache).upload(image)
+    @cached_image    = Shrine.new(:cache).upload(image)
+    @cached_document = Shrine.new(:cache).upload(document)
     super(&block)
     Shrine.storages[:store].clear!
   end
@@ -22,7 +23,7 @@ describe Shrine::Plugins::Transloadit do
         transloadit_assembly(transloadit_file(io))
       end
     end
-    @record.update(attachment: @cached_file.to_json)
+    @record.update(attachment: @cached_image.to_json)
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
@@ -38,7 +39,7 @@ describe Shrine::Plugins::Transloadit do
         transloadit_assembly(original: transloadit_file(io))
       end
     end
-    @record.update(attachment: @cached_file.to_json)
+    @record.update(attachment: @cached_image.to_json)
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
@@ -56,7 +57,7 @@ describe Shrine::Plugins::Transloadit do
       end
     end
     @attacher.class.promote { |data| self.class.transloadit_process(data) }
-    @record.update(attachment: @cached_file.to_json)
+    @record.update(attachment: @cached_image.to_json)
     @record.reload
 
     response = @record.attachment.transloadit_response
@@ -82,7 +83,7 @@ describe Shrine::Plugins::Transloadit do
         transloadit_assembly(transloadit_file(io))
       end
     end
-    @record.update(attachment: @cached_file.to_json)
+    @record.update(attachment: @cached_image.to_json)
 
     response = @record.attachment.transloadit_response
     wait_for_response(response)
@@ -99,9 +100,65 @@ describe Shrine::Plugins::Transloadit do
     refute_empty attachment.metadata["transloadit"]
   end
 
+  describe "when result of processing are multiple files" do
+    it "works for versions" do
+      @store.class.class_eval do
+        def transloadit_process(io, context)
+          thumbs = transloadit_file(io)
+            .add_step("thumbs", "/document/thumbs")
+            .multiple
+
+          transloadit_assembly(thumbs: thumbs)
+        end
+      end
+      @record.update(attachment: @cached_document.to_json)
+
+      response = @record.attachment.transloadit_response
+      wait_for_response(response)
+      @attacher.transloadit_save(response.body)
+
+      assert_equal [:thumbs_0, :thumbs_1, :thumbs_2], @attacher.get.keys
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_0]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_1]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_2]
+    end
+
+    it "fails when not marked as multiple for versions" do
+      @store.class.class_eval do
+        def transloadit_process(io, context)
+          thumbs = transloadit_file(io).add_step("thumbs", "/document/thumbs")
+          transloadit_assembly(thumbs: thumbs)
+        end
+      end
+      @record.update(attachment: @cached_document.to_json)
+      response = @record.attachment.transloadit_response
+      wait_for_response(response)
+
+      assert_raises(Shrine::Plugins::Transloadit::Error) do
+        @attacher.transloadit_save(response.body)
+      end
+    end
+
+    it "fails when not marked as multiple for single files" do
+      @store.class.class_eval do
+        def transloadit_process(io, context)
+          thumbs = transloadit_file(io).add_step("thumbs", "/document/thumbs")
+          transloadit_assembly(thumbs)
+        end
+      end
+      @record.update(attachment: @cached_document.to_json)
+      response = @record.attachment.transloadit_response
+      wait_for_response(response)
+
+      assert_raises(Shrine::Plugins::Transloadit::Error) do
+        @attacher.transloadit_save(response.body)
+      end
+    end
+  end
+
   describe "#transloadit_import_step" do
     it "accepts files from S3" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       import = @store.transloadit_import_step("import", uploaded_file)
       assert_equal "/s3/import",                      import.robot
       assert_equal "import",                          import.name
@@ -113,7 +170,7 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "accepts other files over HTTP/HTTPS" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       uploaded_file.instance_eval { def storage; nil; end }
 
       uploaded_file.instance_eval { def url; "http://example.com"; end }
@@ -130,7 +187,7 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "accepts files over FTP" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       uploaded_file.instance_eval { def storage; nil; end }
       uploaded_file.instance_eval { def url; "ftp://janko:secret@example.com/image.jpg"; end }
       import = @store.transloadit_import_step("import", uploaded_file)
@@ -143,7 +200,7 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "accepts additional step options" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       import = @store.transloadit_import_step("import", uploaded_file, path: "foo")
       assert_equal "foo", import.options[:path]
     end
@@ -151,7 +208,7 @@ describe Shrine::Plugins::Transloadit do
 
   describe "#transloadit_export_step" do
     it "accepts files from S3" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       export = @store.transloadit_export_step("export")
       assert_equal "/s3/store",                       export.robot
       assert_equal "export",                          export.name
@@ -162,7 +219,7 @@ describe Shrine::Plugins::Transloadit do
     end
 
     it "accepts additional step options" do
-      uploaded_file = @cached_file.dup
+      uploaded_file = @cached_image.dup
       export = @store.transloadit_export_step("export", path: "foo")
       assert_equal "store/foo", export.options[:path]
     end
@@ -219,28 +276,39 @@ describe Shrine::Plugins::Transloadit do
       assert_equal "my_export", assembly.options[:steps].last.name
     end
 
-    it "complains when there are duplicate step names" do
+    it "fails when the value is not a TransloaditFile" do
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(123) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file: 123) }
+    end
+
+    it "fails when there are no steps defined on a TransloaditFile" do
+      file = @store.transloadit_file
+
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file: file) }
+    end
+
+    it "fails when the import step is missing" do
+      file = @store.transloadit_file
+        .add_step("resize", "/image/resize")
+        .add_step("export", "/s3/store")
+
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file: file) }
+    end
+
+    it "fails when there are duplicate step names" do
       file = @store.transloadit_file
         .add_step("import", "/s3/import", foo: "foo")
         .add_step("import", "/s3/import", bar: "bar")
 
       assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
+      assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file: file) }
     end
 
-    it "complains when there are no steps defined on a TransloaditFile" do
-      assert_raises(Shrine::Plugins::Transloadit::Error) do
-        @store.transloadit_assembly(@store.transloadit_file)
-      end
-
-      assert_raises(Shrine::Plugins::Transloadit::Error) do
-        @store.transloadit_assembly(file: @store.transloadit_file)
-      end
-    end
-
-    it "complains when the import step is missing" do
+    it "fails when single transloadit file is marked as multiple" do
       file = @store.transloadit_file
-        .add_step("resize", "/image/resize")
-        .add_step("export", "/s3/store")
+        .multiple
 
       assert_raises(Shrine::Plugins::Transloadit::Error) { @store.transloadit_assembly(file) }
     end
@@ -273,7 +341,7 @@ describe Shrine::Plugins::Transloadit do
       end
 
       it "generates import step for passed UploadedFile" do
-        file = @store.transloadit_file(@cached_file)
+        file = @store.transloadit_file(@cached_image)
 
         assert_equal 1, file.steps.count
         assert_equal "/s3/import", file.steps[0].robot
@@ -283,7 +351,7 @@ describe Shrine::Plugins::Transloadit do
 
   describe "#transloadit_response" do
     it "returns nil if there is no metadata" do
-      assert_equal nil, @cached_file.transloadit_response
+      assert_equal nil, @cached_image.transloadit_response
     end
   end
 
@@ -293,7 +361,7 @@ describe Shrine::Plugins::Transloadit do
         transloadit.assembly({})
       end
     end
-    assert_raises(Shrine::Plugins::Transloadit::Error) { @attacher.transloadit_process(@cached_file) }
+    assert_raises(Shrine::Plugins::Transloadit::Error) { @attacher.transloadit_process(@cached_image) }
   end
 
   it "keeps the same transloadit client on the uploader instance" do

@@ -57,4 +57,8 @@ class Minitest::Test
   def image
     File.open("test/fixtures/image.jpg")
   end
+
+  def document
+    File.open("test/fixtures/document.pdf")
+  end
 end

@@ -98,14 +98,28 @@ class Shrine
         # from the main storage.
         def transloadit_save(response, valid: true)
           if versions = response["fields"]["versions"]
-            stored_file = versions.inject({}) do |hash, (name, key)|
-              result = response["results"].fetch(key)[0]
-              uploaded_file = store.transloadit_uploaded_file(result)
-              hash.update(name => uploaded_file)
+            multiple = Array(response["fields"]["multiple"])
+
+            stored_file = versions.inject({}) do |hash, (name, step_name)|
+              results        = response["results"].fetch(step_name)
+              uploaded_files = results.map { |result| store.transloadit_uploaded_file(result) }
+
+              if multiple.include?(step_name)
+                uploaded_files.each_with_index do |uploaded_file, idx|
+                  hash[:"#{name}_#{idx}"] = uploaded_file
+                end
+              elsif uploaded_files.one?
+                hash[name] = uploaded_files[0]
+              else
+                raise Error, "Step produced multiple files but wasn't marked as multiple"
+              end
+
+              hash
             end
           else
-            result = response["results"].values.last[0]
-            stored_file = store.transloadit_uploaded_file(result)
+            results = response["results"].values.last
+            raise Error, "Steps that produce multiple files need to be assigned to a version" if results.count > 1
+            stored_file = store.transloadit_uploaded_file(results[0])
           end
 
           if valid
@@ -231,34 +245,14 @@ class Shrine
         # assembly's payload, so that later in the webhook it can be used to
         # construct a hash of versions.
         def transloadit_assembly(value, context: {}, **options)
-          options[:steps] ||= []
-          options[:fields] ||= {}
+          options = { steps: [], fields: {} }.merge(options)
 
-          if (versions = value).is_a?(Hash)
-            options[:fields]["versions"] = {}
-            raise Error, "The versions Shrine plugin isn't loaded" if !defined?(Shrine::Plugins::Versions)
-            versions.each do |name, transloadit_file|
-              raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
-              unless transloadit_file.exported?
-                path = generate_location(transloadit_file, context.merge(version: name)) + ".${file.ext}"
-                export_step = transloadit_export_step("export_#{name}", path: path)
-                transloadit_file = transloadit_file.add_step(export_step)
-              end
-              options[:steps] |= transloadit_file.steps
-              options[:fields]["versions"][name] = transloadit_file.name
-            end
-          elsif (transloadit_file = value).is_a?(TransloaditFile)
-            raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
-            unless transloadit_file.exported?
-              path = generate_location(transloadit_file, context) + ".${file.ext}"
-              export_step = transloadit_export_step("export", path: path)
-              transloadit_file = transloadit_file.add_step(export_step)
-            end
-            options[:steps] += transloadit_file.steps
-          elsif (template = value).is_a?(String)
-            options[:template_id] = template
+          case value
+          when TransloaditFile then transloadit_assembly_update_single!(value, context, options)
+          when Hash            then transloadit_assembly_update_versions!(value, context, options)
+          when String          then transloadit_assembly_update_template!(value, context, options)
           else
-            raise Error, "First argument has to be a TransloaditFile, a hash of TransloaditFiles, or a template"
+            raise Error, "Assembly value has to be either a TransloaditFile, a hash of TransloaditFile objects, or a template"
           end
 
           if options[:steps].uniq(&:name) != options[:steps]
@@ -271,6 +265,44 @@ class Shrine
         # An cached instance of a Tranloadit client.
         def transloadit
           @transloadit ||= self.class.transloadit
+        end
+
+        private
+
+        # Updates assembly options for single files.
+        def transloadit_assembly_update_single!(transloadit_file, context, options)
+          raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
+          raise Error, "TransloaditFile can be marked as multiple only when used as a version" if transloadit_file.multiple?
+          unless transloadit_file.exported?
+            path = generate_location(transloadit_file, context) + ".${file.ext}"
+            export_step = transloadit_export_step("export", path: path)
+            transloadit_file = transloadit_file.add_step(export_step)
+          end
+          options[:steps] += transloadit_file.steps
+        end
+
+        # Updates assembly options for a hash of versions.
+        def transloadit_assembly_update_versions!(versions, context, options)
+          raise Error, "The versions Shrine plugin isn't loaded" if !defined?(Shrine::Plugins::Versions)
+          options[:fields]["versions"] = {}
+          options[:fields]["multiple"] = []
+          versions.each do |name, transloadit_file|
+            raise Error, "The :#{name} version value is not a TransloaditFile" if !transloadit_file.is_a?(TransloaditFile)
+            raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
+            unless transloadit_file.exported?
+              path = generate_location(transloadit_file, context.merge(version: name)) + ".${file.ext}"
+              export_step = transloadit_export_step("export_#{name}", path: path)
+              transloadit_file = transloadit_file.add_step(export_step)
+            end
+            options[:steps] |= transloadit_file.steps
+            options[:fields]["versions"][name] = transloadit_file.name
+            options[:fields]["multiple"] << transloadit_file.name if transloadit_file.multiple?
+          end
+        end
+
+        # Updates assembly options for a template.
+        def transloadit_assembly_update_template!(template, context, options)
+          options[:template_id] = template
         end
       end
 
@@ -292,9 +324,10 @@ class Shrine
       class TransloaditFile
         attr_reader :transloadit, :steps
 
-        def initialize(transloadit:, steps: [])
+        def initialize(transloadit:, steps: [], multiple: false)
           @transloadit = transloadit
-          @steps = steps
+          @steps       = steps
+          @multiple    = multiple
         end
 
         # Adds a step to the pipeline, automatically setting :use to the
@@ -310,10 +343,20 @@ class Shrine
           end
 
           unless step.options[:use]
-            step.use @steps.last if @steps.any?
+            step.use steps.last if steps.any?
           end
 
-          TransloaditFile.new(transloadit: transloadit, steps: @steps + [step])
+          transloadit_file(steps: steps + [step])
+        end
+
+        # Marks that the defined steps will produce multiple processed files.
+        def multiple
+          transloadit_file(multiple: true)
+        end
+
+        # Returns whether this file was marked as multiple.
+        def multiple?
+          @multiple
         end
 
         # The key that Transloadit will use in its processing results for the
@@ -335,6 +378,17 @@ class Shrine
         # Returns true if this TransloaditFile includes an export step.
         def exported?
           @steps.any? && @steps.last.robot.end_with?("/store")
+        end
+
+        private
+
+        def transloadit_file(**options)
+          TransloaditFile.new(
+            transloadit: @transloadit,
+            steps:       @steps,
+            multiple:    @multiple,
+            **options
+          )
         end
       end
     end

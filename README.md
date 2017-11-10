@@ -108,11 +108,41 @@ class ImageUploader < TransloaditUploader
     medium = original.add_step("resize_500", "/image/resize", width: 500)
     small = original.add_step("resize_300", "/image/resize", width: 300)
 
-    files = {original: original, medium: medium, small: small}
+    files = { original: original, medium: medium, small: small }
 
     transloadit_assembly(files, context: context)
   end
 end
+```
+
+### Multiple files
+
+If you're using robots that produce multiple files (e.g. `/video/adaptive` or
+`/document/thumbs`), then you'll need to assign the corresponding transloadit
+file to a version and mark it with `#multiple`:
+
+```rb
+class VideoUploader < TransloaditUploader
+  plugin :versions
+
+  def transloadit_process(io, context)
+    adaptive = transloadit_file(io)
+      .add_step("adaptive", "/video/adaptive", ...)
+      .multiple # marks that this transloadit file will produce multiple files
+
+    { playlist: adaptive }
+  end
+end
+```
+
+The processing results will now be automatically saved as indexed versions,
+using the version name as the base name:
+
+```rb
+movie.video[:playlist_0] #=> <Shrine::UploadedFile ...>
+movie.video[:playlist_1] #=> <Shrine::UploadedFile ...>
+# ...
+movie.video[:playlist_n] #=> <Shrine::UploadedFile ...>
 ```
 
 ### Webhooks
