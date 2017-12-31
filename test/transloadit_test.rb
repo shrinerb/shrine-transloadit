@@ -361,7 +361,25 @@ describe Shrine::Plugins::Transloadit do
         transloadit.assembly({})
       end
     end
-    assert_raises(Shrine::Plugins::Transloadit::Error) { @attacher.transloadit_process(@cached_image) }
+    exception = assert_raises(Shrine::Plugins::Transloadit::ResponseError) do
+      @attacher.transloadit_process(@cached_image)
+    end
+    refute_nil exception.response.fetch("assembly_url")
+
+    @store.class.class_eval do
+      def transloadit_process(io, context)
+        file = transloadit_file(io).add_step("resize", "/image/resize", width: -1)
+
+        transloadit_assembly(file)
+      end
+    end
+    @attacher.transloadit_process(@cached_image)
+    response = @attacher.get.transloadit_response
+    wait_for_response(response)
+    exception = assert_raises(Shrine::Plugins::Transloadit::ResponseError) do
+      @attacher.transloadit_save(response.body)
+    end
+    refute_nil exception.response.fetch("assembly_url")
   end
 
   it "keeps the same transloadit client on the uploader instance" do
@@ -374,10 +392,6 @@ describe Shrine::Plugins::Transloadit do
 
   def wait_for_response(response)
     response.reload_until_finished!
-
-    if response.error?
-      raise "Assembly errored with: #{response["error"]}\nAssembly: #{response}"
-    end
 
     if response["notify_url"]
       loop do

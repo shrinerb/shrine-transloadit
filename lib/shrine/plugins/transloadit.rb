@@ -7,7 +7,16 @@ require "openssl"
 class Shrine
   module Plugins
     module Transloadit
-      Error = Class.new(Shrine::Error)
+      class Error < Shrine::Error; end
+
+      class ResponseError < Error
+        attr_reader :response
+
+        def initialize(response)
+          @response = response
+          super("#{response["error"]}: #{response["reason"] || response["message"]}")
+        end
+      end
 
       # Accepts Transloadit credentials via `:auth_key` and `:auth_secret`.
       #
@@ -78,13 +87,13 @@ class Shrine
         # into cached file's metadata, which can then be reloaded at will for
         # checking progress of the assembly.
         #
-        # It raises a `Shrine::Error` if Transloadit returned an error.
+        # Raises a `Shrine::Plugins::Transloadit::ResponseError` if Transloadit returned an error.
         def transloadit_process(cached_file = get)
           assembly = store.transloadit_process(cached_file, context)
           assembly.options[:fields] ||= {}
           assembly.options[:fields]["attacher"] = self.dump.merge("attachment" => cached_file.to_json)
           response = assembly.create!
-          raise Error, "#{response["error"]}: #{response["message"]}" if response["error"]
+          raise ResponseError.new(response.body) if response["error"]
           cached_file.metadata["transloadit_response"] = response.body.to_json
           swap(cached_file) or _set(cached_file)
         end
@@ -96,7 +105,11 @@ class Shrine
         # If attachment has changed in the meanwhile, meaning the result of
         # this processing is no longer valid, it deletes the processed files
         # from the main storage.
+        #
+        # Raises a `Shrine::Plugins::Transloadit::ResponseError` if Transloadit returned an error.
         def transloadit_save(response, valid: true)
+          raise ResponseError.new(response) if response["error"]
+
           if versions = response["fields"]["versions"]
             multiple = Array(response["fields"]["multiple"])
 

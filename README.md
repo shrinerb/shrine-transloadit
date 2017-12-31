@@ -390,6 +390,23 @@ transloadit_assembly({
 If you want/need to generate these steps yourself, you can just use the
 expanded forms.
 
+### Errors
+
+Any errors that happen on assembly submission or during processing will be
+propagated as a `Shrine::Plugins::Transloadit::ResponseError`, which
+additionally carries the Transloadit response in the `#response` attribute.
+
+```rb
+post "/webhooks/transloadit" do
+  begin
+    TransloaditUploader::Attacher.transloadit_save(params)
+  rescue Shrine::Plugins::Transloadit::ResponseError => exception
+    exception.response # include this response in your exception notification
+  end
+  # ...
+end
+```
+
 ### Testing
 
 In development or test environment you cannot use webhooks, because Transloadit
