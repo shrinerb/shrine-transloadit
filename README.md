@@ -373,7 +373,7 @@ file.add_step(transloadit_import_step("import", io))
 ```
 
 ```rb
-transloadit_assembly({original: original, thumb: thumb})
+transloadit_assembly({ original: original, thumb: thumb })
 
 # is equivalent to
 
@@ -385,38 +385,6 @@ transloadit_assembly({
 
 If you want/need to generate these steps yourself, you can just use the
 expanded forms.
-
-### Transloadit gem
-
-If you want to have complete control over how steps are generated, you can just
-use the [transloadit gem] directly. This plugin doesn't care how you generate
-your steps, it only requires you to return an instance of
-`Transloadit::Assembly`.
-
-```rb
-class MyUploader < TransloaditUploader
-  def transloadit_process(io, context)
-    # ...
-    transloadit #=> #<Transloadit>
-    transloadit.assembly(options)
-  end
-end
-```
-
-The import/export helper methods simply generate a `Transloadit::Step` object,
-and you can pass additional options:
-
-```rb
-class MyUploader < TransloaditUploader
-  def transloadit_process(io, context)
-    transloadit_import_step("import", io)             #=> #<Transloadit::Step>
-    transloadit_export_step("export", path: "mypath") #=> #<Transloadit::Step>
-  end
-end
-```
-
-The `#add_step` method for `TransloaditFile` is just a convenient way to add
-steps where `:use` is automatically set to previous step.
 
 ### Testing
 
