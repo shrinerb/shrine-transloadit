@@ -1,17 +1,26 @@
 <html>
   <head>
-    <!-- Transloadit -->
-    <script src="https://code.jquery.com/jquery-3.0.0.min.js"></script>
-    <script src="//assets.transloadit.com/js/jquery.transloadit2-v2-latest.js"></script>
+    <title>Shrine Transloadit Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Shrine demo featuring direct uploads to Transloadit using Uppy" />
 
-    <!-- Bootstrap -->
-    <script src="/assets/bootstrap.js" type="text/javascript"></script>
-    <link href="/assets/bootstrap.css" media="screen" rel="stylesheet">
+    <script src="https://unpkg.com/babel-polyfill@6.26.0/dist/polyfill.min.js"></script>
+    <script src="https://unpkg.com/whatwg-fetch@2.0.3/fetch.js"></script>
+    <script src="https://unpkg.com/tus-js-client@1.4.5/dist/tus.js"></script>
+    <script src="https://unpkg.com/uppy@0.22.0/dist/uppy.min.js"></script>
+
+    <link href="https://unpkg.com/bootstrap@3.3.7/dist/css/bootstrap.min.css" media="screen" rel="stylesheet" />
+    <link href="https://unpkg.com/uppy@0.22.0/dist/uppy.min.css" rel="stylesheet" />
+    <%= assets(:css) %>
+
+    <%= csrf_metatag %>
   </head>
 
   <body>
     <div class="container">
       <%= yield %>
     </div>
+
+    <%= assets(:js) %>
   </body>
 </html>

@@ -1,10 +1,11 @@
 source "https://rubygems.org"
 
-gem "roda", "~> 2.15"
+gem "roda", "~> 3.0"
 gem "tilt"
 gem "rack_csrf"
+gem "puma"
 
-gem "sequel"
+gem "sequel", "~> 5.0"
 gem "sqlite3"
 
 gem "shrine", "~> 2.7"

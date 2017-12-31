@@ -10,6 +10,8 @@ class TransloaditDemo < Roda
   plugin :render
   plugin :partials
 
+  plugin :assets, js: "app.js", css: "app.css"
+
   use Rack::MethodOverride
   plugin :all_verbs
 
@@ -19,7 +21,8 @@ class TransloaditDemo < Roda
   plugin :indifferent_params
 
   route do |r|
-    r.public
+    r.public # serve static assets
+    r.assets # serve dynamic assets
 
     @album = Album.first || Album.create(name: "My Album")
 
@@ -33,10 +36,8 @@ class TransloaditDemo < Roda
     end
 
     r.post "album/photos" do
-      params[:photos].map do |_, attrs|
-        photo = @album.add_photo(attrs)
-        partial("photo", locals: {photo: photo, idx: @album.photos.count})
-      end.join("\n")
+      photo = @album.add_photo(params[:photo])
+      partial("photo", locals: { photo: photo, idx: @album.photos.count })
     end
 
     # This is used only in production.

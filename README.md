@@ -174,33 +174,59 @@ CSRF token for this route.
 
 ### Direct uploads
 
-Transloadit supports direct uploads, allowing you to do additional processing
-on upload, along with a [jQuery plugin] for easy integration. Generally you
-only want to do some light processing on direct uploads, and without any
-exporting, so that you have better control over your Transloadit bandwidth.
+Transloadit supports direct uploads, allowing you to do some processing on the
+file before it's submitted to the app. It's recommended that you use [Uppy] for
+client side uploads, take a look its [Transloadit plugin][uppy transloadit] for
+more details.
 
 ```js
-// Using https://github.com/transloadit/jquery-sdk
-$("#upload-form").transloadit({
-  wait: true,
-  params: {
-    auth: {key: "YOUR_TRANSLOADIT_AUTH_KEY"},
-    steps: {
-      extract_thumbnails: {
-        robot:  "/video/thumbs",
-        use:    ":original",
-        count:  8,
-        format: "png",
+// https://uppy.io/docs/transloadit/
+var uppy = Uppy.Core({})
+  .use(Uppy.FileInput, {
+    target:             fileInput.parentNode,
+    allowMultipleFiles: fileInput.multiple
+  })
+  .use(Uppy.Tus, {})
+  .use(Uppy.Transloadit, {
+    waitForEncoding: true,
+    params: {
+      auth: { key: 'YOUR_TRANSLOADIT_KEY' },
+      steps: {
+        // ...
       }
     }
-  }
-});
+  })
+
+uppy.run()
 ```
 
-When direct upload finishes, Transloadit returns information about the uploaded
-file(s), one of which is a temporary URL to the file. You want to save this URL
-as cached attachment, so that you can display it to the user and use it for
-further Transloadit processing. You can do that using [shrine-url]:
+When direct upload finishes Transloadit will return processing results, which
+you can use to construct the Shrine uploaded file data and send it as the
+Shrine attachment. Let's assume that we didn't provide and export step, in
+which case Transloadit will return temporary URL to the processed files, which
+we can use as the uploaded file identifier:
+
+```js
+uppy.on('transloadit:result', function (stepName, result) {
+  var uploadedFileData = JSON.stringify({
+    id: result['ssl_url'],
+    storage: 'cache',
+    metadata: {
+      size: result['size'],
+      filename: result['name'],
+      mime_type: result['mime'],
+      width: result['meta'] && result['meta']['width'],
+      height: result['meta'] && result['meta']['height'],
+      transloadit: result['meta'],
+    }
+  })
+
+  // send `uploadedFileData` as the Shrine attachment
+})
+```
+
+In order for using an URL as the uploaded file identifier to work, you'll need
+to set [shrine-url] as your temporary storage:
 
 ```rb
 gem "shrine-url"
@@ -211,29 +237,7 @@ require "shrine/storage/url"
 Shrine.storages[:cache] = Shrine::Storage::Url.new
 ```
 
-Now when you obtain results from finished direct uploads on the client-side,
-you need to transform the Transloadit hash into Shrine's uploaded file
-representation, using the URL as the "id":
-
-```js
-{
-  id: data['url'], // we save the URL
-  storage: 'cache',
-  metadata: {
-    size: data['size'],
-    filename: data['name'],
-    mime_type: data['mime'],
-    width: data['meta'] && data['meta']['width'],
-    height: data['meta'] && data['meta']['height'],
-    transloadit: data['meta'],
-  }
-}
-```
-
-If the result of direct upload processing are multiple files (e.g. video
-thumbnails), you need to assign them to individual records.
-
-See the **[demo app]** for a complete implementation of direct uploads.
+See the **[demo app]** for a complete example of direct uploads.
 
 ### Templates
 
@@ -457,7 +461,8 @@ $ bundle exec rake test
 [transloadit gem]: https://github.com/transloadit/ruby-sdk
 [robot and arguments]: https://transloadit.com/docs/conversion-robots/
 [templates]: https://transloadit.com/docs/#templates
-[jQuery plugin]: https://github.com/transloadit/jquery-sdk
+[Uppy]: https://uppy.io
+[uppy transloadit]: https://uppy.io/docs/transloadit/
 [demo app]: /demo
 [direct uploads to Transloadit]: #direct-uploads
 [shrine-url]: https://github.com/janko-m/shrine-url

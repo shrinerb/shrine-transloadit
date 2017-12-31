@@ -9,7 +9,7 @@ class ImageUploader < Shrine
     original = transloadit_file(io)
     thumb = original.add_step("resize_300", "/image/resize", width: 300, height: 300)
 
-    files = {original: original, thumb: thumb}
+    files = { original: original, thumb: thumb }
 
     if ENV["RACK_ENV"] == "production"
       notify_url = "https://myapp.com/webhooks/transloadit"

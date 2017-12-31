@@ -21,8 +21,8 @@ Shrine.storages = {
 }
 
 Shrine.plugin :transloadit,
-  auth_key:    ENV.fetch("TRANSLOADIT_AUTH_KEY"),
-  auth_secret: ENV.fetch("TRANSLOADIT_AUTH_SECRET")
+  auth_key:    ENV.fetch("TRANSLOADIT_KEY"),
+  auth_secret: ENV.fetch("TRANSLOADIT_SECRET")
 
 Shrine.plugin :sequel
 Shrine.plugin :backgrounding

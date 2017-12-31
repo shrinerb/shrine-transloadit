@@ -17,8 +17,8 @@ You need to have the following:
 
   ```sh
   # .env
-  TRANSLOADIT_AUTH_KEY="..."
-  TRANSLOADIT_AUTH_SECRET="..."
+  TRANSLOADIT_KEY="..."
+  TRANSLOADIT_SECRET="..."
   S3_BUCKET="..."
   S3_REGION="..."
   S3_ACCESS_KEY_ID="..."

@@ -1,7 +1,7 @@
 <h1><%= @album.name %></h1>
 
 <form id="upload-form" action="/album/photos" method="POST">
-  <input type="file" name="photos" multiple>
+  <input type="file" name="photos" multiple data-transloadit-key="<%= ENV.fetch("TRANSLOADIT_KEY") %>">
 </form>
 
 <form action="/album" method="post">
@@ -14,48 +14,3 @@
   </ul>
   <input type="submit" value="Save" class="btn btn-primary">
 </form>
-
-<script>
-  $("#upload-form").transloadit({
-    triggerUploadOnFileSelection: true,
-    autoSubmit: false,
-    wait: true,
-    params: {
-      auth: {key: '<%= ENV.fetch("TRANSLOADIT_AUTH_KEY") %>'},
-      steps: {
-        resize: {
-          robot: '/image/resize',
-          use: ':original',
-          width: 800,
-          height: 800,
-        }
-      }
-    },
-    onSuccess: function(assembly) {
-      var files = assembly['uploads'].map(function(data) {
-        return {
-          id: data['url'],
-          storage: 'cache',
-          metadata: {
-            size: data['size'],
-            filename: data['name'],
-            mime_type: data['mime'],
-            width: data['meta'] && data['meta']['width'],
-            height: data['meta'] && data['meta']['height'],
-            transloadit: data['meta'],
-          }
-        }
-      });
-
-      var data = {
-        photos: files.map(function(file) {
-          return {image: JSON.stringify(file)};
-        }),
-        _csrf: $("input[name=_csrf]").val(),
-      };
-
-      $.ajax("/album/photos", {method: 'POST', data: data})
-        .done(function(data) { $("ul").append(data) });
-    }
-  });
-</script>
