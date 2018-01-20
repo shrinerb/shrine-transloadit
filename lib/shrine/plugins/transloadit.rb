@@ -111,28 +111,31 @@ class Shrine
           raise ResponseError.new(response) if response["error"]
 
           if versions = response["fields"]["versions"]
-            multiple = Array(response["fields"]["multiple"])
-
             stored_file = versions.inject({}) do |hash, (name, step_name)|
               results        = response["results"].fetch(step_name)
               uploaded_files = results.map { |result| store.transloadit_uploaded_file(result) }
+              multiple       = response["fields"]["multiple"].to_h[name]
 
-              if multiple.include?(step_name)
-                uploaded_files.each_with_index do |uploaded_file, idx|
-                  hash[:"#{name}_#{idx}"] = uploaded_file
-                end
+              if multiple == "list"
+                hash.merge!(name => uploaded_files)
               elsif uploaded_files.one?
-                hash[name] = uploaded_files[0]
+                hash.merge!(name => uploaded_files[0])
               else
                 raise Error, "Step produced multiple files but wasn't marked as multiple"
               end
-
-              hash
             end
           else
-            results = response["results"].values.last
-            raise Error, "Steps that produce multiple files need to be assigned to a version" if results.count > 1
-            stored_file = store.transloadit_uploaded_file(results[0])
+            results        = response["results"].values.last
+            uploaded_files = results.map { |result| store.transloadit_uploaded_file(result) }
+            multiple       = response["fields"]["multiple"]
+
+            if multiple == "list"
+              stored_file = uploaded_files
+            elsif uploaded_files.one?
+              stored_file = uploaded_files[0]
+            else
+              raise Error, "Step produced multiple files but wasn't marked as multiple"
+            end
           end
 
           if valid
@@ -285,20 +288,20 @@ class Shrine
         # Updates assembly options for single files.
         def transloadit_assembly_update_single!(transloadit_file, context, options)
           raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
-          raise Error, "TransloaditFile can be marked as multiple only when used as a version" if transloadit_file.multiple?
           unless transloadit_file.exported?
             path = generate_location(transloadit_file, context) + ".${file.ext}"
             export_step = transloadit_export_step("export", path: path)
             transloadit_file = transloadit_file.add_step(export_step)
           end
           options[:steps] += transloadit_file.steps
+          options[:fields]["multiple"] = transloadit_file.multiple
         end
 
         # Updates assembly options for a hash of versions.
         def transloadit_assembly_update_versions!(versions, context, options)
           raise Error, "The versions Shrine plugin isn't loaded" if !defined?(Shrine::Plugins::Versions)
           options[:fields]["versions"] = {}
-          options[:fields]["multiple"] = []
+          options[:fields]["multiple"] = {}
           versions.each do |name, transloadit_file|
             raise Error, "The :#{name} version value is not a TransloaditFile" if !transloadit_file.is_a?(TransloaditFile)
             raise Error, "The given TransloaditFile is missing an import step" if !transloadit_file.imported?
@@ -309,7 +312,7 @@ class Shrine
             end
             options[:steps] |= transloadit_file.steps
             options[:fields]["versions"][name] = transloadit_file.name
-            options[:fields]["multiple"] << transloadit_file.name if transloadit_file.multiple?
+            options[:fields]["multiple"][name] = transloadit_file.multiple
           end
         end
 
@@ -337,7 +340,7 @@ class Shrine
       class TransloaditFile
         attr_reader :transloadit, :steps
 
-        def initialize(transloadit:, steps: [], multiple: false)
+        def initialize(transloadit:, steps: [], multiple: nil)
           @transloadit = transloadit
           @steps       = steps
           @multiple    = multiple
@@ -362,14 +365,13 @@ class Shrine
           transloadit_file(steps: steps + [step])
         end
 
-        # Marks that the defined steps will produce multiple processed files.
-        def multiple
-          transloadit_file(multiple: true)
-        end
-
-        # Returns whether this file was marked as multiple.
-        def multiple?
-          @multiple
+        # Specify the result format.
+        def multiple(format = nil)
+          if format
+            transloadit_file(multiple: format)
+          else
+            @multiple
+          end
         end
 
         # The key that Transloadit will use in its processing results for the

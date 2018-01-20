@@ -117,32 +117,38 @@ end
 
 ### Multiple files
 
-If you're using robots that produce multiple files (e.g. `/video/adaptive` or
-`/document/thumbs`), then you'll need to assign the corresponding transloadit
-file to a version and mark it with `#multiple`:
+Some Transloadit robots might produce multiple files, e.g. `/video/adaptive` or
+`/document/thumbs`. By default, shrine-transloadit will raise an error when a
+step returned more than one file, but it's possible to specify the result
+format in which shrine-transloadit should save the processed files.
+
+#### `list`
+
+The `list` format means that the processed files will be saved as a flat list.
 
 ```rb
-class VideoUploader < TransloaditUploader
-  plugin :versions
-
+class PdfUploader < TransloaditUploader
   def transloadit_process(io, context)
-    adaptive = transloadit_file(io)
-      .add_step("adaptive", "/video/adaptive", ...)
-      .multiple # marks that this transloadit file will produce multiple files
+    thumbs = transloadit_file(io)
+      .add_step("thumbs", "/document/thumbs", ...)
+      .multiple(:list) # marks that the result of this pipeline should be saved as a list
 
-    { playlist: adaptive }
+    transloadit_assembly(thumbs)
   end
 end
 ```
 
-The processing results will now be automatically saved as indexed versions,
-using the version name as the base name:
+This will make the processing results save as an array of files:
 
 ```rb
-movie.video[:playlist_0] #=> <Shrine::UploadedFile ...>
-movie.video[:playlist_1] #=> <Shrine::UploadedFile ...>
-# ...
-movie.video[:playlist_n] #=> <Shrine::UploadedFile ...>
+pdf.file #=>
+# [
+#   #<Shrine::UploadedFile ...>
+#   #<Shrine::UploadedFile ...>
+#   ...
+# ]
+
+pdf.file[0] # page 1
 ```
 
 ### Webhooks

@@ -100,13 +100,36 @@ describe Shrine::Plugins::Transloadit do
     refute_empty attachment.metadata["transloadit"]
   end
 
-  describe "when result of processing are multiple files" do
+  describe "with list multiple format" do
+    it "works for single files" do
+      @store.class.class_eval do
+        def transloadit_process(io, context)
+          thumbs = transloadit_file(io)
+            .add_step("thumbs", "/document/thumbs")
+            .multiple(:list)
+
+          transloadit_assembly(thumbs)
+        end
+      end
+      @record.update(attachment: @cached_document.to_json)
+
+      response = @record.attachment.transloadit_response
+      wait_for_response(response)
+      @attacher.transloadit_save(response.body)
+
+      assert_instance_of Array,            @attacher.get
+      assert_equal 3,                      @attacher.get.size
+      assert_kind_of Shrine::UploadedFile, @attacher.get[0]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[1]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[2]
+    end
+
     it "works for versions" do
       @store.class.class_eval do
         def transloadit_process(io, context)
           thumbs = transloadit_file(io)
             .add_step("thumbs", "/document/thumbs")
-            .multiple
+            .multiple(:list)
 
           transloadit_assembly(thumbs: thumbs)
         end
@@ -117,17 +140,18 @@ describe Shrine::Plugins::Transloadit do
       wait_for_response(response)
       @attacher.transloadit_save(response.body)
 
-      assert_equal [:thumbs_0, :thumbs_1, :thumbs_2], @attacher.get.keys
-      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_0]
-      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_1]
-      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs_2]
+      assert_instance_of Array,            @attacher.get[:thumbs]
+      assert_equal 3,                      @attacher.get[:thumbs].size
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs][0]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs][1]
+      assert_kind_of Shrine::UploadedFile, @attacher.get[:thumbs][2]
     end
 
-    it "fails when not marked as multiple for versions" do
+    it "fails when not marked as list for single files" do
       @store.class.class_eval do
         def transloadit_process(io, context)
           thumbs = transloadit_file(io).add_step("thumbs", "/document/thumbs")
-          transloadit_assembly(thumbs: thumbs)
+          transloadit_assembly(thumbs)
         end
       end
       @record.update(attachment: @cached_document.to_json)
@@ -139,11 +163,11 @@ describe Shrine::Plugins::Transloadit do
       end
     end
 
-    it "fails when not marked as multiple for single files" do
+    it "fails when not marked as list for versions" do
       @store.class.class_eval do
         def transloadit_process(io, context)
           thumbs = transloadit_file(io).add_step("thumbs", "/document/thumbs")
-          transloadit_assembly(thumbs)
+          transloadit_assembly(thumbs: thumbs)
         end
       end
       @record.update(attachment: @cached_document.to_json)
