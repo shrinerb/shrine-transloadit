@@ -54,7 +54,6 @@ class Shrine
         # params that Transloadit POSTed to the endpoint. It checks the
         # signature, loads the attacher, saves processing results to the record.
         def transloadit_save(params)
-          params["transloadit"] = params["transloadit"].to_json if params["transloadit"].is_a?(Hash)
           shrine_class.verify_transloadit_signature!(params)
           response = JSON.parse(params["transloadit"])
           data = response["fields"]["attacher"]
