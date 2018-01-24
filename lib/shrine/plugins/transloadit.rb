@@ -55,25 +55,13 @@ class Shrine
         # signature, loads the attacher, saves processing results to the record.
         def transloadit_save(params)
           params["transloadit"] = params["transloadit"].to_json if params["transloadit"].is_a?(Hash)
-          check_transloadit_signature!(params)
+          shrine_class.verify_transloadit_signature!(params)
           response = JSON.parse(params["transloadit"])
           data = response["fields"]["attacher"]
           attacher = self.load(data)
           cached_file = attacher.uploaded_file(data["attachment"])
           attacher.transloadit_save(response, valid: attacher.get == cached_file)
           attacher
-        end
-
-        # Checks if the webhook has indeed been triggered by Transloadit, by
-        # checking if sent signature matches the calculated signature, and
-        # raising a `Shrine::Error` if signatures don't match.
-        def check_transloadit_signature!(params)
-          sent_signature = params["signature"]
-          payload = params["transloadit"]
-          algorithm = OpenSSL::Digest.new('sha1')
-          secret = shrine_class.opts[:transloadit_auth_secret]
-          calculated_signature = OpenSSL::HMAC.hexdigest(algorithm, secret, payload)
-          raise Error, "Transloadit signature that was sent doesn't match the calculated signature" if calculated_signature != sent_signature
         end
       end
 
@@ -154,6 +142,19 @@ class Shrine
             key:    opts[:transloadit_auth_key],
             secret: opts[:transloadit_auth_secret],
           )
+        end
+
+        # Checks if the webhook has indeed been triggered by Transloadit, by
+        # checking if sent signature matches the calculated signature, and
+        # raising a `Shrine::Plugins::Transloadit::Error` if signatures don't
+        # match.
+        def verify_transloadit_signature!(params)
+          sent_signature = params["signature"]
+          payload = params["transloadit"]
+          algorithm = OpenSSL::Digest.new('sha1')
+          secret = opts[:transloadit_auth_secret]
+          calculated_signature = OpenSSL::HMAC.hexdigest(algorithm, secret, payload)
+          raise Error, "Received signature doesn't match the calculated signature" if calculated_signature != sent_signature
         end
       end
 
