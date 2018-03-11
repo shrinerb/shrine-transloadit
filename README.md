@@ -478,7 +478,7 @@ $ bundle exec rake test
 
 [MIT](/LICENSE.txt)
 
-[Shrine]: https://github.com/janko-m/shrine
+[Shrine]: https://github.com/shrinerb/shrine
 [Transloadit]: https://transloadit.com/
 [many storage services]: https://transloadit.com/docs/conversion-robots/#file-export-robots
 [transloadit gem]: https://github.com/transloadit/ruby-sdk
@@ -488,4 +488,4 @@ $ bundle exec rake test
 [uppy transloadit]: https://uppy.io/docs/transloadit/
 [demo app]: /demo
 [direct uploads to Transloadit]: #direct-uploads
-[shrine-url]: https://github.com/janko-m/shrine-url
+[shrine-url]: https://github.com/shrinerb/shrine-url

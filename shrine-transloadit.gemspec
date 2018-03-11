@@ -5,7 +5,7 @@ Gem::Specification.new do |gem|
   gem.required_ruby_version = ">= 2.2"
 
   gem.summary      = "Provides Transloadit integration for Shrine."
-  gem.homepage     = "https://github.com/janko-m/shrine-transloadit"
+  gem.homepage     = "https://github.com/shrinerb/shrine-transloadit"
   gem.authors      = ["Janko Marohnić"]
   gem.email        = ["janko.marohnic@gmail.com"]
   gem.license      = "MIT"
