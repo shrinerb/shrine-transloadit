@@ -73,8 +73,7 @@ describe Shrine::Plugins::Transloadit do
     assert @record.attachment.exists?
     refute_empty @record.attachment.metadata["transloadit"]
 
-    params["transloadit"] = JSON.parse(params["transloadit"])
-    @attacher.class.transloadit_save(params) # handles parsed JSON
+    @attacher.class.transloadit_save(params)
   end
 
   it "populates metadata" do
