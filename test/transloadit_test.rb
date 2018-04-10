@@ -99,6 +99,24 @@ describe Shrine::Plugins::Transloadit do
     refute_empty attachment.metadata["transloadit"]
   end
 
+  it "does not fail when a version is filtered out" do
+    @store.class.class_eval do
+      def transloadit_process(io, context)
+        filtered = transloadit_file(io)
+          .add_step("filter", "/file/filter", accepts: [["${file.size}", "<", 0]])
+
+        transloadit_assembly(filtered: filtered)
+      end
+    end
+    @record.update(attachment: @cached_image.to_json)
+
+    response = @record.attachment.transloadit_response
+    wait_for_response(response)
+    @attacher.transloadit_save(response.body)
+
+    assert_nil @record.attachment[:filtered]
+  end
+
   describe "with list multiple format" do
     it "works for single files" do
       @store.class.class_eval do

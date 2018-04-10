@@ -99,7 +99,7 @@ class Shrine
 
           if versions = response["fields"]["versions"]
             stored_file = versions.inject({}) do |hash, (name, step_name)|
-              results        = response["results"].fetch(step_name)
+              results        = response["results"].fetch(step_name) { [] }
               uploaded_files = results.map { |result| store.transloadit_uploaded_file(result) }
               multiple       = response["fields"]["multiple"].to_h[name]
 
@@ -107,6 +107,8 @@ class Shrine
                 hash.merge!(name => uploaded_files)
               elsif uploaded_files.one?
                 hash.merge!(name => uploaded_files[0])
+              elsif uploaded_files.empty?
+                hash
               else
                 raise Error, "Step produced multiple files but wasn't marked as multiple"
               end
