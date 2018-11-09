@@ -8,12 +8,13 @@
 document.querySelectorAll('input[type=file]').forEach(function (fileInput) {
   fileInput.style.display = 'none' // uppy will add its own file input
 
-  uppy = Uppy.Core({ id: fileInput.id })
-    .use(Uppy.FileInput, {
-      target:             fileInput.parentNode,
-      allowMultipleFiles: fileInput.multiple
+  uppy = Uppy.Core({
+      id: fileInput.id,
+      autoProceed: true,
     })
-    .use(Uppy.Tus, {})
+    .use(Uppy.FileInput, {
+      target: fileInput.parentNode,
+    })
     .use(Uppy.Transloadit, {
       waitForEncoding: true,
       params: {
@@ -28,11 +29,12 @@ document.querySelectorAll('input[type=file]').forEach(function (fileInput) {
         }
       }
     })
-    .use(Uppy.ProgressBar, {
-      target: fileInput.parentNode
+    .use(Uppy.Informer, {
+      target: fileInput.parentNode,
     })
-
-  uppy.run()
+    .use(Uppy.ProgressBar, {
+      target: fileInput.parentNode,
+    })
 
   uppy.on('transloadit:result', function (stepName, result) {
     var uploadedFileData = JSON.stringify({
