@@ -1,474 +1,608 @@
 # Shrine::Plugins::Transloadit
 
-Provides [Transloadit] integration for [Shrine].
+Provides [Transloadit] integration for [Shrine], using its [Ruby SDK].
 
-Transloadit is a service that helps you handles file uploads, resize, crop and
+Transloadit is a service that helps you handle file uploads, resize, crop and
 watermark your images, make GIFs, transcode your videos, extract thumbnails,
-generate audio waveforms, and so much more. In short, Transloadit is the Swiss
-Army Knife for your files.
+generate audio waveforms and more.
+
+## Contents
+
+* [Installation](#installation)
+* [Setup](#setup)
+  - [Credentials](#credentials)
+* [Usage](#usge)
+  - [Backgrounding](#backgrounding)
+* [Notifications](#notifications)
+* [Direct uploads](#direct-uploads)
+* [Promotion](#promotion)
+* [Skipping exports](#skipping-exports)
+* [API](#api)
+  - [Processing & Saving](#processing-saving)
+  - [Generating steps](#generating-steps)
+  - [Parsing files](#parsing-files)
+  - [Verifying signature](#verifying-signature)
+  - [Transloadit instance](#transloadit-instance)
+
+## Installation
+
+Put the gem in your Gemfile:
+
+```rb
+# Gemfile
+gem "shrine-transloadit", "~> 1.0"
+```
 
 ## Setup
 
-While Transloadit is able to export processed files to [many storage services],
-this plugin currently supports only Amazon S3 (just because there are no Shrine
-integrations written for other services on that list yet). You can just add
-shrine-transloadit to your current setup:
+Load the `transloadit` plugin and configure your Transloadit key and secret:
 
 ```rb
-gem "shrine"
-gem "aws-sdk-s3", "~> 1.2" # for Amazon S3
-gem "shrine-transloadit"
+Shrine.plugin :transloadit, auth: {
+  key:    "YOUR_TRANSLOADIT_KEY",
+  secret: "YOUR_TRANSLOADIT_SECRET",
+}
 ```
 
+### Credentials
+
+You'll need to create [credentials] for the storage services you want to import
+from and export to. Then you need to map these credentials to Shrine storages:
+
 ```rb
-require "shrine"
-require "shrine/storage/s3"
-
-s3_options = {
-  bucket: "my-bucket",
-  region: "my-region",
-  access_key_id: "abc",
-  secret_access_key: "xyz",
-}
-
 Shrine.storages = {
-  cache: Shrine::Storage::S3.new(prefix: "cache", **s3_options),
-  store: Shrine::Storage::S3.new(prefix: "store", **s3_options),
+  cache: Shrine::Storage::S3.new(prefix: "cache", **options),
+  store: Shrine::Storage::S3.new(**options),
 }
 
-class TransloaditUploader < Shrine
-  plugin :transloadit,
-    auth_key: "your transloadit key",
-    auth_secret: "your transloadit secret"
-end
+Shrine.plugin :transloadit, auth: { ... },
+  credentials: {
+    cache: :s3_store, # use "s3_store" credentials for :cache storage
+    store: :s3_store, # use "s3_store" credentials for :store storage
+  }
 ```
 
-This setup assumes you're doing direct S3 uploads, but you can also do [direct
-uploads to Transloadit], or just use any other `:cache` storage which provides
-URLs for uploaded files.
+### Derivatives
 
-## How it works
+The examples will assume you have the [`derivatives`][derivatives] plugin
+loaded:
 
-Transloadit works in a way that you create an "assembly", which contains all
-information about how the file(s) should be processed, from import to export.
-Processing itself happens asynchronously, and you can give Transloadit a URL
-which it will POST results to when processing finishes.
-
-This plugin allows you to easily implement this webhook flow. You can intercept
-promoting, and submit a Transloadit assembly using the cached file, along with
-a URL to the route in your app where you'd like Transloadit to POST the results
-of processing. Then you can call the plugin again in the route to save the
-results to your attachment column.
-
-The **[demo app]** shows a complete implementation of this flow, and can serve
-as a good baseline for your own implementation.
+```rb
+Shrine.plugin :derivatives
+```
 
 ## Usage
 
-We loaded the `transloadit` plugin in a `TransloaditUploader` base uploader
-class, so that any uploaders that you want to do Transloadit processing with
-can just inherit from that class.
+The `transloadit` plugin provides helper methods for creating [import][import
+robots] and [export][export robots] steps, as well as for parsing out exported
+files from results.
 
-Transloadit assemblies are built inside `#transloadit_process` method in your
-uploader, and you can use some convenient helper methods which the plugin
-provides.
+Here is a basic example where we kick off transcoding and thumbnail extraction
+from an attached video, wait for assembly to complete, then save processed
+files as derivatives:
 
 ```rb
-class ImageUploader < TransloaditUploader # inherit from our Transloadit base uploader class
-  def transloadit_process(io, context)
-    resized = transloadit_file(io)
-      .add_step("resize", "/image/resize", width: 800)
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do
+    import = file.transloadit_import_step
+    encode = transloadit_step "encode", "/video/encode", use: import
+    thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
+    export = store.transloadit_export_step use: [encode, thumbs]
 
-    transloadit_assembly(resized, context: context)
+    assembly = transloadit.assembly(steps: [import, encode, thumbs, export])
+    assembly.create!
+  end
+
+  Attacher.transloadit_saver :video do |response|
+    transcoded = store.transloadit_file(response["results"]["encode"])
+    thumbnails = store.transloadit_files(response["results"]["thumbs"])
+
+    merge_derivatives(transcoded: transcoded, thumbnails: thumbnails)
   end
 end
 ```
-
-These helper methods just provide a higher-level interface over the
-[transloadit gem], which you might want look at to get a better understanding
-of how building assemblies works.
-
-In short, in Transloadit every action, be it import, processing, or export, is
-a "step". Each step is defined by its [robot and arguments], and needs to have
-a *unique name*. Transloadit allows you to define the entire processing flow
-(which can result in multiple files) as a collection of steps, which is called
-an "assembly". Once the assembly is built it can be submitted to Transloadit.
-
-### Versions
-
-With Transloadit you can create multiple files in a single assembly, and this
-plugin allows you to leverage that in form of a hash of versions.
-
 ```rb
-class ImageUploader < TransloaditUploader
-  plugin :versions
+response = attacher.transloadit_process(:video)
+response.reload_until_finished!
 
-  def transloadit_process(io, context)
-    original = transloadit_file(io)
-    medium = original.add_step("resize_500", "/image/resize", width: 500)
-    small = original.add_step("resize_300", "/image/resize", width: 300)
-
-    files = { original: original, medium: medium, small: small }
-
-    transloadit_assembly(files, context: context)
-  end
+if response.error?
+  # handle error
 end
+
+attacher.transloadit_save(:video, response)
+attacher.derivatives #=>
+# {
+#   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,
+#   thumbnails: [
+#     #<Shrine::UploadedFile storage_key=:store ...>,
+#     #<Shrine::UploadedFile storage_key=:store ...>,
+#     ...
+#   ]
+# }
 ```
 
-### Multiple files
+### Backgrounding
 
-Some Transloadit robots might produce multiple files, e.g. `/video/adaptive` or
-`/document/thumbs`. By default, shrine-transloadit will raise an error when a
-step returned more than one file, but it's possible to specify the result
-format in which shrine-transloadit should save the processed files.
-
-#### `list`
-
-The `list` format means that the processed files will be saved as a flat list.
+When using [backgrounding], it's probably best to create the assembly after
+promotion:
 
 ```rb
-class PdfUploader < TransloaditUploader
-  def transloadit_process(io, context)
-    thumbs = transloadit_file(io)
-      .add_step("thumbs", "/document/thumbs", ...)
-      .multiple(:list) # marks that the result of this pipeline should be saved as a list
-
-    transloadit_assembly(thumbs)
-  end
-end
-```
-
-This will make the processing results save as an array of files:
-
-```rb
-pdf.file #=>
-# [
-#   #<Shrine::UploadedFile ...>
-#   #<Shrine::UploadedFile ...>
-#   ...
-# ]
-
-pdf.file[0] # page 1
-```
-
-### Webhooks
-
-Transloadit performs its processing asynchronously, and you can provide a URL
-where you want Transloadit to POST results of processing once it's finished.
-
-```rb
-class ImageUploader < TransloaditUploader
-  def transloadit_process(io, context)
+class PromoteJob
+  def perform(record, name, file_data)
+    attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
+    attacher.atomic_promote
+    attacher.transloadit_process(:video)
     # ...
-    transloadit_assembly(files, notify_url: "http://myapp.com/webhooks/transloadit")
+  rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
   end
 end
 ```
 
-Then in your `POST /webhooks/transloadit` route you can call the plugin to
-automatically save the results to the attachment column in Shrine's format.
+## Notifications
+
+When using [assembly notifications], the attacher data can be sent to the
+webhook via `:fields`:
 
 ```rb
-post "/webhooks/transloadit" do
-  TransloaditUploader::Attacher.transloadit_save(params)
-  # return 200 status
+Attacher.transloadit_processor :video do
+  # ...
+  assembly = transloadit.assembly(
+    steps:      [ ... ],
+    notify_url: "https://example.com/webhooks/transloadit",
+    fields:     {
+      attacher: {
+        record_class: record.class,
+        record_id:    record.id,
+        name:         name,
+        data:         file_data,
+      }
+    }
+  )
+  assembly.create!
+end
+```
+
+Then in the webhook handler we can load the attacher and [atomically
+persist][atomic_helpers] assembly results. If during processing the attachment
+has changed or record was deleted, we make sure we delete processed files.
+
+```rb
+post "/transloadit/video" do
+  Shrine.transloadit_verify!(params) # verify transloadit signature
+
+  response = JSON.parse(params["transloadit"])
+
+  record_class, record_id, name, file_data = response["fields"]["attacher"].values
+  record_class = Object.const_get(record_class)
+
+  begin
+    record   = record_class.find(record_id)
+    attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
+
+    attacher.transloadit_save(:video, response)
+
+    attacher.atomic_persist
+  rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
+    unless attacher
+      attacher = record_class.send(:"#{name}_attacher")
+      attacher.transloadit_save(:video, response)
+    end
+
+    attacher.destroy(background: true) # delete orphaned files
+  end
+
+  # return successful response for Transloadit
+  status 200
 end
 ```
 
 Note that if you have CSRF protection, make sure that you skip verifying the
 CSRF token for this route.
 
-### Direct uploads
+## Direct uploads
 
-Transloadit supports direct uploads, allowing you to do some processing on the
-file before it's submitted to the app. It's recommended that you use [Uppy] for
-client side uploads, take a look its [Transloadit plugin][uppy transloadit] for
-more details.
+Transloadit supports client side uploads via [Robodog], an [Uppy]-based
+JavaScript library.
 
-```js
-// https://uppy.io/docs/transloadit/
-var uppy = Uppy.Core({})
-  .use(Uppy.FileInput, {
-    target:             fileInput.parentNode,
-    allowMultipleFiles: fileInput.multiple
-  })
-  .use(Uppy.Tus, {})
-  .use(Uppy.Transloadit, {
-    waitForEncoding: true,
-    params: {
-      auth: { key: 'YOUR_TRANSLOADIT_KEY' },
-      steps: {
-        // ...
-      }
-    }
-  })
-
-uppy.run()
-```
-
-When direct upload finishes Transloadit will return processing results, which
-you can use to construct the Shrine uploaded file data and send it as the
-Shrine attachment. Let's assume that we didn't provide and export step, in
-which case Transloadit will return temporary URL to the processed files, which
-we can use as the uploaded file identifier:
+If you have an HTML form, you can use Robodog's [Form API][Robodog Form] to add
+Transloadit's encoding capabilities to it:
 
 ```js
-uppy.on('transloadit:result', function (stepName, result) {
-  var uploadedFileData = JSON.stringify({
-    id: result['ssl_url'],
-    storage: 'cache',
-    metadata: {
-      size: result['size'],
-      filename: result['name'],
-      mime_type: result['mime'],
-      width: result['meta'] && result['meta']['width'],
-      height: result['meta'] && result['meta']['height'],
-      transloadit: result['meta'],
-    }
-  })
-
-  // send `uploadedFileData` as the Shrine attachment
+window.Robodog.form('form#myform', {
+  params: {
+    auth: { key: 'YOUR_TRANSLOADIT_KEY' },
+    template_id: 'YOUR_TEMPLATE_ID',
+  },
+  waitForEncoding: true,
+  // ...
 })
 ```
 
-In order for using an URL as the uploaded file identifier to work, you'll need
-to set [shrine-url] as your temporary storage:
+With the above setup, Robodog will send the assembly results to your controller
+in the `transloadit` param, which we can parse out and save to our record. See
+the [demo app] for an example of doing this.
+
+## Promotion
+
+If you want Transloadit to also upload your cached original file to permanent
+storage, you can skip promotion on the Shrine side:
 
 ```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do
+    import = file.transloadit_import_step
+    encode = transloadit_step "encode", "/video/encode", use: import
+    thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
+    export = store.transloadit_export_step use: [import, encode, thumbs] # include original
+
+    assembly = transloadit.assembly(use: [import, encode, thumbs, export])
+    assembly.create!
+  end
+
+  Attacher.transloadit_saver :video do |response|
+    stored     = store.transloadit_file(response["results"]["import"])
+    transcoded = store.transloadit_file(response["results"]["encode"])
+    thumbnails = store.transloadit_files(response["results"]["thumbs"])
+
+    set(stored) # set promoted file
+    merge_derivatives(transcoded: transcoded, thumbnails: thumbnails)
+  end
+end
+```
+```rb
+class PromoteJob
+  def perform(record, name, file_data)
+    attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
+
+    response = attacher.transloadit_process(:video)
+    response.reload_until_finished!
+
+    if response.error?
+      # handle error
+    end
+
+    original_file = attacher.file
+    attacher.transloadit_save(:video, response)
+
+    attacher.atomic_persist(original_file)
+  rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
+    # delete orphaned processed files (backgrounding plugin is recommended)
+    attacher.destroy(background: true) if attacher
+  end
+end
+```
+
+## Skipping exports
+
+If you want to use Transloadit only for processing, and prefer to store results
+to yourself, you can do so with help of the [shrine-url] gem.
+
+```rb
+# Gemfile
 gem "shrine-url"
 ```
-
 ```rb
+# ...
 require "shrine/storage/url"
-Shrine.storages[:cache] = Shrine::Storage::Url.new
+
+Shrine.storages = {
+  # ...
+  url: Shrine::Storage::Url.new,
+}
 ```
 
-See the **[demo app]** for a complete example of direct uploads.
-
-### Templates
-
-Transloadit recommends using [templates], since they allow you to replay failed
-assemblies, and also allow you not to expose credentials in your HTML.
-
-Here is an example where the whole processing is defined inside a template,
-and we just set the location of the imported file.
+If you don't specify an export step, Transloadit will return processed files
+uploaded to Transloadit's temporary storage. You can load these results using
+the `:url` storage, and then upload them to your permanent storage:
 
 ```rb
-# Your Transloadit template saved as "my_template"
-{
-  steps: {
-    resize: {
-      robot: "/image/resize",
-      use: "import", # the "import" step will be passed in
-      width: 800
-    },
-    export: {
-      robot: "/s3/store",
-      use: "resize",
-      bucket: "YOUR_AWS_BUCKET",
-      key: "YOUR_AWS_KEY",
-      secret: "YOUR_AWS_SECRET",
-      bucket_region: "YOUR_AWS_REGION",
-      path: "videos/${unique_prefix}/${file.url_name}"
-    }
-  }
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do
+    import = file.transloadit_import_step
+    encode = transloadit_step "encode", "/video/encode", use: import
+    thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
+    # no export step
+
+    assembly = transloadit.assembly(steps: [import, encode, thumbs])
+    assembly.create!
+  end
+
+  Attacher.transloadit_saver :video do |response|
+    url        = shrine_class.new(:url)
+    transcoded = url.transloadit_file(response["results"]["encode"])
+    thumbnails = url.transloadit_files(response["results"]["thumbs"])
+
+    # results are uploaded to Transloadit's temporary storage
+    transcoded #=> #<Shrine::UploadedFile @storage_key=:url @id="https://tmp.transloadit.com/..." ...>
+    thumbnails #=> [#<Shrine::UploadedFile @storage_key=:url @id="https://tmp.transloadit.com/..." ...>, ...]
+
+    # upload results to permanent storage
+    add_derivatives(transcoded: transcoded, thumbnails: thumbnails)
+  end
+end
+```
+```rb
+response = attacher.transloadit_process(:video)
+response.reload_until_finished!
+
+if response.error?
+  # handle error
+end
+
+attacher.transloadit_save(:video, response)
+attacher.derivatives #=>
+# {
+#   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,
+#   thumbnails: [
+#     #<Shrine::UploadedFile storage_key=:store ...>,
+#     #<Shrine::UploadedFile storage_key=:store ...>,
+#     ...
+#   ]
+# }
+```
+
+## API
+
+### Processor
+
+The processor is just a block registered under an identifier, which is expected
+to create a Transloadit assembly:
+
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do
+    # ...
+  end
+end
+```
+
+It is executed when `Attacher#transloadit_process` is called:
+
+```rb
+attacher.transloadit_process(:video) # calls :video processor
+```
+
+Any arguments passed to the processor will be given to the block:
+
+```rb
+attacher.transloadit_process(:video, foo: "bar")
+```
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do |options|
+    options #=> { :foo => "bar" }
+  end
+end
+```
+
+The processor block is executed in context of a `Shrine::Attacher` instance:
+
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_processor :video do
+    self #=> #<Shrine::Attacher>
+
+    record #=> #<Video>
+    name   #=> :file
+    file   #=> #<Shrine::UploadedFile>
+  end
+end
+```
+
+### Saver
+
+The saver is just a block registered under an identifier, which is expected to
+save given Transloadit results into the attacher:
+
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_saver :video do |results|
+    # ...
+  end
+end
+```
+
+It is executed when `Attacher#transloadit_save` is called:
+
+```rb
+attacher.transloadit_save(:video, results) # calls :video saver
+```
+
+Any arguments passed to the saver will be given to the block:
+
+```rb
+attacher.transloadit_save(:video, results, foo: "bar")
+```
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_saver :video do |results, options|
+    options #=> { :foo => "bar" }
+  end
+end
+```
+
+The saver block is executed in context of a `Shrine::Attacher` instance:
+
+```rb
+class VideoUploader < Shrine
+  Attacher.transloadit_saver :video do |results|
+    self #=> #<Shrine::Attacher>
+
+    record #=> #<Video>
+    name   #=> :file
+    file   #=> #<Shrine::UploadedFile>
+  end
+end
+```
+
+### Step
+
+You can generate `Transloadit::Step` objects with `Shrine.transloadit_step`:
+
+```rb
+Shrine.transloadit_step "my_name", "/my/robot", **options
+#=> #<Transloadit::Step name="my_name", robot="/my/robot", options={...}>
+```
+
+This method adds the ability to pass another `Transloadit::Step` object as the
+`:use` parameter:
+
+```rb
+step_one = Shrine.transloadit_step "one", "/robot/one"
+step_two = Shrine.transloadit_step "two", "/robot/two", use: step_one
+step_two.options[:use] #=> ["one"]
+```
+
+### Import step
+
+The `Shrine::UploadedFile#transloadit_import_step` method generates an import
+step for the uploaded file:
+
+```rb
+file = Shrine.upload(io, :store)
+file.storage #=> #<Shrine::Storage::S3>
+file.id      #=> "foo"
+
+step = file.transloadit_import_step
+
+step       #=> #<Transloadit::Step ...>
+step.name  #=> "import"
+step.robot #=> "/s3/import"
+
+step.options[:path]        #=> "foo"
+step.options[:credentials] #=> :s3_store (inferred from the plugin setting)
+```
+
+You can change the default step name:
+
+```rb
+step = file.transloadit_import_step("my_import")
+step.name #=> "my_import"
+```
+
+You can also pass step options:
+
+```rb
+step = file.transloadit_import_step(ignore_errors: ["meta"])
+step.options[:ignore_errors] #=> ["meta"]
+```
+
+The following import robots are currently supported:
+
+| Robot          | Description                                                |
+| :-----------   | :----------                                                |
+| `/s3/import`   | activated for `Shrine::Storage::S3`                        |
+| `/http/import` | activated for any other storage which returns HTTP(S) URLs |
+| `/ftp/import`  | activated for any other storage which returns FTP URLs     |
+
+### Export step
+
+The `Shrine#transloadit_export_step` method generates an export step for the underlying
+storage:
+
+```rb
+uploader = Shrine.new(:store)
+uploader.storage #=> #<Shrine::Storage::S3>
+
+step = uploader.transloadit_export_step
+
+step       #=> #<Transloadit::Step ...>
+step.name  #=> "export"
+step.robot #=> "/s3/store"
+
+step.options[:credentials] #=> :s3_store (inferred from the plugin setting)
+```
+
+You can change the default step name:
+
+```rb
+step = uploader.transloadit_export_step("my_export")
+step.name #=> "my_export"
+```
+
+You can also pass step options:
+
+```rb
+step = file.transloadit_export_step(acl: "public-read")
+step.options[:acl] #=> "public-read"
+```
+
+The following export robots are currently supported:
+
+| Robot            | Description                                                       |
+| :----            | :----------                                                       |
+| `/s3/store`      | activated for `Shrine::Storage::S3`                               |
+| `/google/store`  | activated for [`Shrine::Storage::GoogleCloudStorage`][shrine-gcs] |
+| `/youtube/store` | activated for [`Shrine::Storage::YouTube`][shrine-youtube]        |
+
+### File
+
+The `Shrine#transloadit_file` method will convert a Transloadit result hash
+into a `Shrine::UploadedFile` object:
+
+```rb
+uploader = Shrine.new(:store)
+uploader.storage #=> #<Shrine::Storage::S3>
+
+file = uploader.transloadit_file(
+  "url" => "https://my-bucket.s3.amazonaws.com/foo",
+  # ...
+)
+
+file.storage #=> #<Shrine::Storage::S3>
+file.id      #=> "foo"
+```
+
+It will include basic metadata:
+
+```rb
+file = uploader.transloadit_file(
+  # ...
+  "name" => "matrix.mp4",
+  "size" => 44198,
+  "mime" => "video/mp4",
+)
+
+file.original_filename #=> "matrix.mp4"
+file.size              #=> 44198
+file.mime_type         #=> "video/mp4"
+```
+
+It will also merge any custom metadata:
+
+```rb
+file = uploader.transloadit_file(
+  # ...
+  "meta" => { "duration" => 9000, ... },
+)
+
+file["duration"] #=> 9000
+```
+
+Currently only `Shrine::Stroage::S3` is supported. However, you can still
+handle other remote files using [`Shrine::Storage::Url`][shrine-url]:
+
+```rb
+Shrine.storages => {
+  # ...
+  url: Shrine::Storage::Url.new,
 }
 ```
 ```rb
-class ImageUplaoder < TransloaditUploader
-  def transloadit_process(io, context)
-    import = transloadit_import_step("import", io)
-    transloadit_assembly("my_template", steps: [import])
-  end
-end
-```
+uploader = Shrine.new(:url)
+uploader #=> #<Shrine::Storage::Url>
 
-### Backgrounding
-
-Even though submitting a Transloadit assembly doesn't require any uploading, it
-still does two HTTP requests, so you might want to put them into a background
-job. You can configure that in the `TransloaditUploader` base uploader class:
-
-```rb
-class TransloaditUploader < Shrine
-  plugin :transloadit,
-    auth_key: "your transloadit key",
-    auth_secret: "your transloadit secret"
-
-  Attacher.promote { |data| TransloaditJob.perform_async(data) }
-end
-```
-```rb
-class TransloaditJob
-  include Sidekiq::Worker
-
-  def perform(data)
-    TransloaditUploader::Attacher.transloadit_process(data)
-  end
-end
-```
-
-### Tracking progress
-
-When an assembly is submitted, Transloadit returns a lot of useful information
-about the status of that assembly, which the plugin saves to the cached
-attachment's metadata.
-
-```rb
-response = photo.image.transloadit_response
-response.body #=>
-# {
-#   "ok"                 => "ASSEMBLY_EXECUTING",
-#   "message"            => "The assembly is currently being executed.",
-#   "assembly_id"        => "83d07d10414011e68cc8c5df79919836",
-#   "assembly_url"       => "http://api2.janani.transloadit.com/assemblies/83d07d10414011e68cc8c5df79919836",
-#   "execution_start"    => "2016/07/03 17:06:42 GMT",
-#   "execution_duration" => 2.113,
-#   "params"             => "{\"steps\":{...}}",
-#   ...
-# }
-```
-
-At an point during the execution of the assembly you can refresh this
-information:
-
-```rb
-response.finished? #=> false
-response.reload!
-response.finished? #=> true
-```
-
-### Metadata
-
-For each processed file Transloadit also extracts a great deal of useful
-metadata. When the Transloadit processing is finished and the results are saved
-as a Shrine attachment, this metadata will be automatically used to populate
-the attachment's metadata.
-
-Additionally the Transloadit's metadata hash will be saved in an additional
-metadata key, so that you can access any other values:
-
-```rb
-photo = Photo.create(image: image_file)
-photo.image.metadata["transloadit"] #=>
-# {
-#   "date_recorded"         => "2013/09/04 08:03:39",
-#   "date_file_created"     => "2013/09/04 12:03:39 GMT",
-#   "date_file_modified"    => "2016/07/11 02:27:11 GMT",
-#   "aspect_ratio"          => "1.504",
-#   "city"                  => "Decatur",
-#   "state"                 => "Georgia",
-#   "country"               => "United States",
-#   "latitude"              => 33.77519301,
-#   "longitude"             => -84.295608,
-#   "orientation"           => "Horizontal (normal)",
-#   "colorspace"            => "RGB",
-#   "average_color"         => "#8b8688",
-#   ...
-# }
-```
-
-### Import & Export
-
-Every `TransloaditFile` needs to have an import and an export step. This plugin
-automatically generates those steps for you:
-
-```rb
-transloadit_file(io)
-
-# is equivalent to
-
-file = transloadit_file
-file.add_step(transloadit_import_step("import", io))
-```
-
-```rb
-transloadit_assembly({ original: original, thumb: thumb })
-
-# is equivalent to
-
-transloadit_assembly({
-  original: original.add_step(transloadit_export_step("export_original")),
-  thumb: thumb.add_step(transloadit_export_step("export_thumb")),
-})
-```
-
-If you want/need to generate these steps yourself, you can just use the
-expanded forms.
-
-### Errors
-
-Any errors that happen on assembly submission or during processing will be
-propagated as a `Shrine::Plugins::Transloadit::ResponseError`, which
-additionally carries the Transloadit response in the `#response` attribute.
-
-```rb
-post "/webhooks/transloadit" do
-  begin
-    TransloaditUploader::Attacher.transloadit_save(params)
-  rescue Shrine::Plugins::Transloadit::ResponseError => exception
-    exception.response # include this response in your exception notification
-  end
+file = uploader.transloadit_file(
+  "url" => "https://example.com/foo",
   # ...
-end
-```
+)
 
-### Testing
-
-In development or test environment you cannot use webhooks, because Transloadit
-as an external service cannot access your localhost. In this case you can just
-do polling:
-
-```rb
-class MyUploader < TransloaditUploader
-  def transloadit_process(io, context)
-    # ...
-
-    if ENV["RACK_ENV"] == "production"
-      notify_url = "https://myapp.com/webhooks/transloadit"
-    else
-      # In development we cannot receive webhooks, because Transloadit as an
-      # external service cannot reach our localhost.
-    end
-
-    transloadit_assembly(files, context: context, notify_url: notify_url)
-  end
-end
-```
-
-```rb
-class TransloaditJob
-  include Sidekiq::Worker
-
-  def perform(data)
-    attacher = TransloaditUploader::Attacher.transloadit_process(data)
-
-    # Webhooks won't work in development, so we can just use polling.
-    unless ENV["RACK_ENV"] == "production"
-      response = attacher.get.transloadit_response
-      response.reload_until_finished!
-      attacher.transloadit_save(response.body)
-    end
-  end
-end
+file.id #=> "https://example.com/foo"
 ```
 
 ## Contributing
 
-Before you can run tests, you need to first create an `.env` file in the
-project root containing your Transloadit and Amazon S3 credentials:
-
-```sh
-# .env
-TRANSLOADIT_KEY="..."
-TRANSLOADIT_SECRET="..."
-S3_BUCKET="..."
-S3_REGION="..."
-S3_ACCESS_KEY_ID="..."
-S3_SECRET_ACCESS_KEY="..."
-```
-
-Afterwards you can run the tests:
+Tests are run with:
 
 ```sh
 $ bundle exec rake test
@@ -480,12 +614,18 @@ $ bundle exec rake test
 
 [Shrine]: https://github.com/shrinerb/shrine
 [Transloadit]: https://transloadit.com/
-[many storage services]: https://transloadit.com/docs/conversion-robots/#file-export-robots
-[transloadit gem]: https://github.com/transloadit/ruby-sdk
-[robot and arguments]: https://transloadit.com/docs/conversion-robots/
-[templates]: https://transloadit.com/docs/#templates
-[Uppy]: https://uppy.io
-[uppy transloadit]: https://uppy.io/docs/transloadit/
-[demo app]: /demo
-[direct uploads to Transloadit]: #direct-uploads
+[Ruby SDK]: https://github.com/transloadit/ruby-sdk
+[credentials]: https://transloadit.com/docs/#16-template-credentials
+[import robots]: https://transloadit.com/docs/transcoding/#overview-service-file-importing
+[export robots]: https://transloadit.com/docs/transcoding/#overview-service-file-exporting
+[derivatives]: https://github.com/shrinerb/shrine/blob/master/doc/plugins/derivatives.md#readme
+[assembly notifications]: https://transloadit.com/docs/#24-assembly-notifications
+[backgrounding]: https://github.com/shrinerb/shrine/blob/master/doc/plugins/backgrounding.md#readme
+[shrine-url]: https://github.com/shrinerb/shrine-url
+[Robodog]: https://uppy.io/docs/robodog/
+[Robodog Form]: https://uppy.io/docs/robodog/form/
+[Uppy]: https://uppy.io/
+[atomic_helpers]: https://github.com/shrinerb/shrine/blob/master/doc/plugins/atomic_helpers.md#readme
+[shrine-gcs]: https://github.com/renchap/shrine-google_cloud_storage
+[shrine-youtube]: https://github.com/thedyrt/shrine-storage-you_tube
 [shrine-url]: https://github.com/shrinerb/shrine-url
