@@ -1,16 +1,39 @@
-<h1><%= @album.name %></h1>
+<h1>Albums</h1>
 
-<form id="upload-form" action="/album/photos" method="POST">
-  <input type="file" name="photos" multiple data-transloadit-key="<%= ENV.fetch("TRANSLOADIT_KEY") %>">
-</form>
+<% form action: "/photos", method: "POST", id: "photos-form" do |f| %>
+  <div class="form-group">
+    <%= f.input :file, attr: { multiple: true } %>
+  </div>
+<% end %>
 
-<form action="/album" method="post">
-  <input type="hidden" name="_method" value="put">
-  <%= csrf_tag %>
-  <ul class="list-unstyled">
-    <% @album.photos.each_with_index do |photo, idx| %>
-      <%= partial("photo", locals: {photo: photo, idx: idx}) %>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Filename</th>
+      <th>Dimensions</th>
+      <th>Image</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% photos.each do |photo| %>
+      <tr>
+        <td><%= photo.filename %></td>
+        <td><%= photo.dimensions.join("x") %></td>
+        <td><img src="<%= photo.image_url(:small) %>" width=100 class="img-thumbnail" /></td>
+      </tr>
     <% end %>
-  </ul>
-  <input type="submit" value="Save" class="btn btn-primary">
-</form>
+  </tbody>
+</table>
+
+<script>
+window.Robodog.form("form#photos-form", {
+  params: {
+    auth: { key: '<%= ENV.fetch("TRANSLOADIT_KEY") %>' },
+    template_id: '<%= ENV.fetch("TRANSLOADIT_TEMPLATE") %>',
+  },
+  waitForEncoding: true,
+  modal: true,
+  closeAfterFinish: true,
+  triggerUploadOnSubmit: false,
+})
+</script>

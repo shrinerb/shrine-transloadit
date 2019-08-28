@@ -1,23 +1,41 @@
 require "./config/shrine"
 
 class ImageUploader < Shrine
-  plugin :remove_attachment
-  plugin :pretty_location
-  plugin :versions
+  plugin :derivatives
 
-  def transloadit_process(io, context)
-    original = transloadit_file(io)
-    thumb = original.add_step("resize_300", "/image/resize", width: 300, height: 300)
+  Attacher.transloadit_processor :thumbnails do
+    import = file.transloadit_import_step
 
-    files = { original: original, thumb: thumb }
-
-    if ENV["RACK_ENV"] == "production"
-      notify_url = "https://myapp.com/webhooks/transloadit"
-    else
-      # In development we cannot receive webhooks, because Transloadit as an
-      # external service cannot reach our localhost.
+    resizes = [300, 500, 800].map do |size|
+      transloadit_step "resize_#{size}", "/image/resize",
+        width: size, height: size, use: import
     end
 
-    transloadit_assembly(files, context: context, notify_url: notify_url)
+    export = store.transloadit_export_step use: resizes
+
+    assembly = transloadit.assembly(
+      steps:      [import, *resizes, export],
+      notify_url: ENV["TRANSLOADIT_NOTIFY_URL"],
+      fields: {
+        attacher: { # needed if you're using notifications
+          record_class: record.class,
+          record_id:    record.id,
+          name:         name,
+          data:         file_data,
+        }
+      }
+    )
+
+    assembly.create!
+  end
+
+  Attacher.transloadit_saver :thumbnails do |response|
+    results = response["results"]
+
+    merge_derivatives(
+      small:  store.transloadit_file(results["resize_300"]),
+      medium: store.transloadit_file(results["resize_500"]),
+      large:  store.transloadit_file(results["resize_800"]),
+    )
   end
 end

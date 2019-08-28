@@ -1,49 +1,38 @@
 require "roda"
 require "tilt/erb"
 
-require "./models/album"
 require "./models/photo"
+require "./services/transloadit_service"
+
+require "json"
 
 class TransloaditDemo < Roda
-  plugin :public
-
   plugin :render
-  plugin :partials
 
-  plugin :assets, js: "app.js", css: "app.css"
-
-  use Rack::MethodOverride
-  plugin :all_verbs
-
-  use Rack::Session::Cookie, secret: "secret"
-  plugin :csrf, raise: true, skip: ["POST:/webhooks/transloadit"]
-
-  plugin :indifferent_params
+  plugin :sessions, secret: SecureRandom.hex(32)
+  plugin :route_csrf
+  plugin :forme_route_csrf
 
   route do |r|
-    r.public # serve static assets
-    r.assets # serve dynamic assets
-
-    @album = Album.first || Album.create(name: "My Album")
-
-    r.root do
-      view(:index)
-    end
-
-    r.put "album" do
-      @album.update(params[:album])
-      r.redirect r.referer
-    end
-
-    r.post "album/photos" do
-      photo = @album.add_photo(params[:photo])
-      partial("photo", locals: { photo: photo, idx: @album.photos.count })
-    end
-
     # This is used only in production.
     r.post "webhooks/transloadit" do
-      Shrine::Attacher.transloadit_save(params)
-      response.write("") # returns empty 200 status
+      TransloaditService.receive_webhook(r.params)
+
+      "" # returns empty 200 status
+    end
+
+    check_csrf!
+
+    r.root do
+      photos = Photo.all
+
+      view(:index, locals: { photos: photos })
+    end
+
+    r.post "photos" do
+      TransloaditService.create_photos(r.params)
+
+      r.redirect "/"
     end
   end
 end

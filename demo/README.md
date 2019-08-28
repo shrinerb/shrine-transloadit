@@ -13,12 +13,26 @@ You need to have the following:
 
 ## Setup
 
+* Create a Transloadit template with the following body:
+
+```rb
+{
+  "steps": {
+    "optimize": {
+      "robot": "/image/optimize",
+      "use": ":original"
+    }
+  }
+}
+```
+
 * Add .env with Transloadit and Amazon S3 credentials:
 
   ```sh
   # .env
   TRANSLOADIT_KEY="..."
   TRANSLOADIT_SECRET="..."
+  TRANSLOADIT_TEMPLATE="..."
   S3_BUCKET="..."
   S3_REGION="..."
   S3_ACCESS_KEY_ID="..."

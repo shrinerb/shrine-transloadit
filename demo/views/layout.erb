@@ -4,22 +4,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Shrine demo featuring direct uploads to Transloadit using Uppy" />
 
-    <script src="https://unpkg.com/babel-polyfill@6.26.0/dist/polyfill.min.js"></script>
-    <script src="https://unpkg.com/whatwg-fetch@2.0.3/fetch.js"></script>
-    <script src="https://transloadit.edgly.net/releases/uppy/v0.28.0/dist/uppy.min.js"></script>
+    <script src="https://transloadit.edgly.net/releases/uppy/robodog/v1.2.0/robodog.min.js"></script>
 
+    <link href="https://transloadit.edgly.net/releases/uppy/robodog/v1.2.0/robodog.min.css" rel="stylesheet" />
     <link href="https://unpkg.com/bootstrap@3.3.7/dist/css/bootstrap.min.css" media="screen" rel="stylesheet" />
-    <link href="https://transloadit.edgly.net/releases/uppy/v0.28.0/dist/uppy.min.css" rel="stylesheet" />
-    <%= assets(:css) %>
-
-    <%= csrf_metatag %>
   </head>
 
   <body>
     <div class="container">
       <%= yield %>
     </div>
-
-    <%= assets(:js) %>
   </body>
 </html>
