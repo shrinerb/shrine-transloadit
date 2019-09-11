@@ -10,19 +10,18 @@ generate audio waveforms and more.
 
 * [Installation](#installation)
 * [Setup](#setup)
-  - [Credentials](#credentials)
-* [Usage](#usge)
-  - [Backgrounding](#backgrounding)
+* [Usage](#usage)
 * [Notifications](#notifications)
 * [Direct uploads](#direct-uploads)
 * [Promotion](#promotion)
 * [Skipping exports](#skipping-exports)
 * [API](#api)
-  - [Processing & Saving](#processing-saving)
-  - [Generating steps](#generating-steps)
-  - [Parsing files](#parsing-files)
-  - [Verifying signature](#verifying-signature)
-  - [Transloadit instance](#transloadit-instance)
+  - [Processor](#processor)
+  - [Saver](#saver)
+  - [Step](#step)
+    - [Import step](#import-step)
+    - [Export step](#export-step)
+  - [File](#file)
 
 ## Installation
 
