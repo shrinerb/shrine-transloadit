@@ -147,19 +147,14 @@ class Shrine
             fail Error, "storage not supported: #{storage.inspect}"
           end
 
-          metadata = {
-            "filename"  => result.fetch("name"),
-            "size"      => result.fetch("size"),
-            "mime_type" => result.fetch("mime"),
-          }
-
-          # merge transloadit's meatadata, but don't let it override ours
-          metadata.merge!(result.fetch("meta")) { |k, v1, v2| v1 }
-
           self.class::UploadedFile.new(
             id:       id,
             storage:  storage_key,
-            metadata: metadata,
+            metadata: result.fetch("meta").merge(
+              "filename"  => result.fetch("name"),
+              "size"      => result.fetch("size"),
+              "mime_type" => result.fetch("mime"),
+            )
           )
         end
 
