@@ -92,9 +92,9 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |response|
-    transcoded = store.transloadit_file(response["results"]["encode"])
-    thumbnails = store.transloadit_files(response["results"]["thumbs"])
+  Attacher.transloadit_saver :video do |results|
+    transcoded = store.transloadit_file(results["encode"])
+    thumbnails = store.transloadit_files(results["thumbs"])
 
     merge_derivatives(transcoded: transcoded, thumbnails: thumbnails)
   end
@@ -108,7 +108,7 @@ if response.error?
   # handle error
 end
 
-attacher.transloadit_save(:video, response)
+attacher.transloadit_save(:video, response["results"])
 attacher.derivatives #=>
 # {
 #   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,
@@ -238,10 +238,10 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |response|
-    stored     = store.transloadit_file(response["results"]["import"])
-    transcoded = store.transloadit_file(response["results"]["encode"])
-    thumbnails = store.transloadit_files(response["results"]["thumbs"])
+  Attacher.transloadit_saver :video do |results|
+    stored     = store.transloadit_file(results["import"])
+    transcoded = store.transloadit_file(results["encode"])
+    thumbnails = store.transloadit_files(results["thumbs"])
 
     set(stored) # set promoted file
     merge_derivatives(transcoded: transcoded, thumbnails: thumbnails)
@@ -261,7 +261,7 @@ class PromoteJob
     end
 
     original_file = attacher.file
-    attacher.transloadit_save(:video, response)
+    attacher.transloadit_save(:video, response["results"])
 
     attacher.atomic_persist(original_file)
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
@@ -306,10 +306,10 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |response|
+  Attacher.transloadit_saver :video do |results|
     url        = shrine_class.new(:url)
-    transcoded = url.transloadit_file(response["results"]["encode"])
-    thumbnails = url.transloadit_files(response["results"]["thumbs"])
+    transcoded = url.transloadit_file(results["encode"])
+    thumbnails = url.transloadit_files(results["thumbs"])
 
     # results are uploaded to Transloadit's temporary storage
     transcoded #=> #<Shrine::UploadedFile @storage_key=:url @id="https://tmp.transloadit.com/..." ...>
@@ -328,7 +328,7 @@ if response.error?
   # handle error
 end
 
-attacher.transloadit_save(:video, response)
+attacher.transloadit_save(:video, response["results"])
 attacher.derivatives #=>
 # {
 #   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,
@@ -548,8 +548,28 @@ file = uploader.transloadit_file(
   # ...
 )
 
+file #=> #<Shrine::UploadedFile @id="foo" storage_key=:store ...>
+
 file.storage #=> #<Shrine::Storage::S3>
 file.id      #=> "foo"
+```
+
+You can use the plural `Shrine#transloadit_files` to convert an array of
+results:
+
+```rb
+files = uploader.transloadit_files [
+  { "url" => "https://my-bucket.s3.amazonaws.com/foo", ... },
+  { "url" => "https://my-bucket.s3.amazonaws.com/bar", ... },
+  { "url" => "https://my-bucket.s3.amazonaws.com/baz", ... },
+]
+
+files #=>
+# [
+#   #<Shrine::UploadedFile @id="foo" @storage_key=:store ...>,
+#   #<Shrine::UploadedFile @id="bar" @storage_key=:store ...>,
+#   #<Shrine::UploadedFile @id="baz" @storage_key=:store ...>,
+# ]
 ```
 
 It will include basic metadata:

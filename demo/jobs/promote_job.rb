@@ -29,7 +29,7 @@ class PromoteJob
       response.reload_until_finished!
       fail "assembly failed: #{response.body.to_json}" if response.error?
 
-      attacher.transloadit_save(:thumbnails, response)
+      attacher.transloadit_save(:thumbnails, response["results"])
       attacher.atomic_persist
     end
   rescue *ATOMIC_ERRORS

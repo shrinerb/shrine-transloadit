@@ -29,13 +29,11 @@ class ImageUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :thumbnails do |response|
-    results = response["results"]
+  Attacher.transloadit_saver :thumbnails do |results|
+    size_300 = store.transloadit_file(results["resize_300"])
+    size_500 = store.transloadit_file(results["resize_500"])
+    size_800 = store.transloadit_file(results["resize_800"])
 
-    merge_derivatives(
-      small:  store.transloadit_file(results["resize_300"]),
-      medium: store.transloadit_file(results["resize_500"]),
-      large:  store.transloadit_file(results["resize_800"]),
-    )
+    merge_derivatives(small: size_300, medium: size_500, large: size_800)
   end
 end
