@@ -222,7 +222,7 @@ class VideoUploader < Shrine
     thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
     export = store.transloadit_export_step use: [import, encode, thumbs] # include original
 
-    assembly = transloadit.assembly(use: [import, encode, thumbs, export])
+    assembly = transloadit.assembly(steps: [import, encode, thumbs, export])
     assembly.create!
   end
 
