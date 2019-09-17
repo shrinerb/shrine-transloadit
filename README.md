@@ -22,6 +22,7 @@ generate audio waveforms and more.
     - [Import step](#import-step)
     - [Export step](#export-step)
   - [File](#file)
+* [Instrumentation](#instrumentation)
 
 ## Installation
 
@@ -617,6 +618,48 @@ file = uploader.transloadit_file(
 )
 
 file.id #=> "https://example.com/foo"
+```
+
+## Instrumentation
+
+If the `instrumentation` plugin has been loaded, the `transloadit` plugin adds
+instrumentation around triggering processing.
+
+```rb
+# instrumentation plugin needs to be loaded *before* transloadit
+plugin :instrumentation
+plugin :transloadit
+```
+
+Calling the processor will trigger a `transloadit.shrine` event with the
+following payload:
+
+| Key          | Description                            |
+| :----        | :----------                            |
+| `:processor` | Name of the processor                  |
+| `:uploader`  | The uploader class that sent the event |
+
+A default log subscriber is added as well which logs these events:
+
+```
+Transloadit (1238ms) – {:processor=>:video, :uploader=>VideoUploader}
+```
+
+You can also use your own log subscriber:
+
+```rb
+plugin :transloadit, log_subscriber: -> (event) {
+  Shrine.logger.info JSON.generate(name: event.name, duration: event.duration, **event.payload)
+}
+```
+```
+{"name":"transloadit","duration":1238,"processor":"video","uploader":"VideoUploader"}
+```
+
+Or disable logging altogether:
+
+```rb
+plugin :transloadit, log_subscriber: nil
 ```
 
 ## Contributing
