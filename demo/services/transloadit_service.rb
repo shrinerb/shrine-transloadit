@@ -3,12 +3,6 @@ require "./models/photo"
 require "json"
 
 class TransloaditService
-  ATOMIC_ERRORS = [
-    Shrine::AttachmentChanged,
-    Sequel::NoMatchingRow,
-    Sequel::NoExistingObject,
-  ]
-
   def self.receive_webhook(params)
     Shrine.transloadit_verify!(params)
 
@@ -17,19 +11,16 @@ class TransloaditService
     record_class, record_id, name, file_data = response["fields"]["attacher"].values
     record_class = Object.const_get(record_class)
 
+    attacher    = record_class.send(:"#{name}_attacher")
+    derivatives = attacher.transloadit_save(:thumbnails, response["results"])
+
     begin
       record   = record_class.with_pk!(record_id)
       attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
 
-      attacher.transloadit_save(:thumbnails, response)
-
+      attacher.set_derivatives(derivatives)
       attacher.atomic_persist
-    rescue *ATOMIC_ERRORS
-      unless attacher
-        attacher = record_class.send(:"#{name}_attacher")
-        attacher.transloadit_save(:thumbnails, response)
-      end
-
+    rescue Shrine::AttachmentChanged, Sequel::NoMatchingRow
       attacher.destroy(background: true) # delete orphaned files
     end
   end
