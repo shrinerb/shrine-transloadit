@@ -35,19 +35,10 @@ gem "shrine-transloadit", "~> 1.0"
 
 ## Setup
 
-Load the `transloadit` plugin and configure your Transloadit key and secret:
-
-```rb
-Shrine.plugin :transloadit, auth: {
-  key:    "YOUR_TRANSLOADIT_KEY",
-  secret: "YOUR_TRANSLOADIT_SECRET",
-}
-```
-
-### Credentials
-
-You'll need to create [credentials] for the storage services you want to import
-from and export to. Then you need to map these credentials to Shrine storages:
+You'll first need to create [credentials] for the storage service you want to
+import from and export to. Let's assume you're using S3 and have named the
+credentials `s3_store`. Now you can load the `transloadit` plugin, providing
+Transloadit key & secret, and mapping credentials to Shrine storages:
 
 ```rb
 Shrine.storages = {
@@ -55,7 +46,11 @@ Shrine.storages = {
   store: Shrine::Storage::S3.new(**options),
 }
 
-Shrine.plugin :transloadit, auth: { ... },
+Shrine.plugin :transloadit,
+  auth: {
+    key:    "YOUR_TRANSLOADIT_KEY",
+    secret: "YOUR_TRANSLOADIT_SECRET",
+  },
   credentials: {
     cache: :s3_store, # use "s3_store" credentials for :cache storage
     store: :s3_store, # use "s3_store" credentials for :store storage
