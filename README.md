@@ -41,11 +41,13 @@ credentials `s3_store`. Now you can load the `transloadit` plugin, providing
 Transloadit key & secret, and mapping credentials to Shrine storages:
 
 ```rb
+# example storage configuration
 Shrine.storages = {
   cache: Shrine::Storage::S3.new(prefix: "cache", **options),
   store: Shrine::Storage::S3.new(**options),
 }
 
+# transloadit plugin configuration
 Shrine.plugin :transloadit,
   auth: {
     key:    "YOUR_TRANSLOADIT_KEY",
@@ -55,14 +57,8 @@ Shrine.plugin :transloadit,
     cache: :s3_store, # use "s3_store" credentials for :cache storage
     store: :s3_store, # use "s3_store" credentials for :store storage
   }
-```
 
-### Derivatives
-
-The examples will assume you have the [`derivatives`][derivatives] plugin
-loaded:
-
-```rb
+# for storing processed files
 Shrine.plugin :derivatives
 ```
 
