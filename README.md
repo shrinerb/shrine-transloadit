@@ -248,10 +248,8 @@ class PromoteJob
       # handle error
     end
 
-    original_file = attacher.file
     attacher.transloadit_save(:video, response["results"])
-
-    attacher.atomic_persist(original_file)
+    attacher.atomic_persist attacher.uploaded_file(file_data)
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
     # delete orphaned processed files (backgrounding plugin is recommended)
     attacher.destroy(background: true) if attacher
