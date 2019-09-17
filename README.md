@@ -164,15 +164,16 @@ post "/transloadit/video" do
   response = JSON.parse(params["transloadit"])
 
   record_class, record_id, name, file_data = response["fields"]["attacher"].values
+  record_class = Object.const_get(record_class)
 
-  attacher    = Object.const_get(record_class).send(:"#{name}_attacher")
+  attacher    = record_class.send(:"#{name}_attacher")
   derivatives = attacher.transloadit_save(:video, response["results"])
 
   begin
     record   = record_class.find(record_id)
     attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
 
-    attacher.set_derivatives(derivatives)
+    attacher.merge_derivatives(derivatives)
     attacher.atomic_persist
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
     attacher.destroy(background: true) # delete orphaned files
