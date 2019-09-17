@@ -9,9 +9,8 @@ class TransloaditService
     response = JSON.parse(params["transloadit"])
 
     record_class, record_id, name, file_data = response["fields"]["attacher"].values
-    record_class = Object.const_get(record_class)
 
-    attacher    = record_class.send(:"#{name}_attacher")
+    attacher    = Object.const_get(record_class).send(:"#{name}_attacher")
     derivatives = attacher.transloadit_save(:thumbnails, response["results"])
 
     begin
