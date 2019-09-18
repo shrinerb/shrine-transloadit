@@ -20,8 +20,8 @@ class TransloaditService
 
       attacher.merge_derivatives(derivatives)
       attacher.atomic_persist
-    rescue Shrine::AttachmentChanged, Sequel::NoMatchingRow
-      attacher.destroy(background: true) # delete orphaned files
+    rescue Shrine::AttachmentChanged, Sequel::NoMatchingRow, Sequel::NoExistingObject
+      attacher.destroy_attached # delete orphaned files
     end
   end
 

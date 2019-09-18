@@ -176,7 +176,7 @@ post "/transloadit/video" do
     attacher.merge_derivatives(derivatives)
     attacher.atomic_persist
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
-    attacher.destroy(background: true) # delete orphaned files
+    attacher.destroy_attached # delete orphaned processed files
   end
 
   # return successful response for Transloadit
@@ -252,8 +252,7 @@ class PromoteJob
     attacher.transloadit_save(:video, response["results"])
     attacher.atomic_persist attacher.uploaded_file(file_data)
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
-    # delete orphaned processed files (backgrounding plugin is recommended)
-    attacher.destroy(background: true) if attacher
+    attacher&.destroy_attached # delete orphaned processed files
   end
 end
 ```
