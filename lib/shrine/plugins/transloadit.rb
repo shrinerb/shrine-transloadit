@@ -37,7 +37,7 @@ class Shrine
       end
 
       module AttacherClassMethods
-        def transloadit_processor(name, &block)
+        def transloadit_processor(name = :default, &block)
           if block
             shrine_class.opts[:transloadit][:processors][name.to_sym] = block
           else
@@ -46,7 +46,7 @@ class Shrine
           end
         end
 
-        def transloadit_saver(name, &block)
+        def transloadit_saver(name = :default, &block)
           if block
             shrine_class.opts[:transloadit][:savers][name.to_sym] = block
           else
@@ -57,14 +57,19 @@ class Shrine
       end
 
       module AttacherMethods
-        def transloadit_process(name, *args)
+        def transloadit_process(name = :default, *args)
           processor = self.class.transloadit_processor(name)
           instrument_transloadit(name) do
             instance_exec(*args, &processor)
           end
         end
 
-        def transloadit_save(name, *args)
+        def transloadit_save(name = :default, *args)
+          unless name.respond_to?(:to_sym)
+            args.prepend(name)
+            name = :default
+          end
+
           saver = self.class.transloadit_saver(name)
           instance_exec(*args, &saver)
         end

@@ -74,7 +74,7 @@ files as derivatives:
 
 ```rb
 class VideoUploader < Shrine
-  Attacher.transloadit_processor :video do
+  Attacher.transloadit_processor do
     import = file.transloadit_import_step
     encode = transloadit_step "encode", "/video/encode", use: import
     thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
@@ -84,7 +84,7 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |results|
+  Attacher.transloadit_saver do |results|
     transcoded = store.transloadit_file(results["encode"])
     thumbnails = store.transloadit_files(results["thumbs"])
 
@@ -93,14 +93,14 @@ class VideoUploader < Shrine
 end
 ```
 ```rb
-response = attacher.transloadit_process(:video)
+response = attacher.transloadit_process
 response.reload_until_finished!
 
 if response.error?
   # handle error
 end
 
-attacher.transloadit_save(:video, response["results"])
+attacher.transloadit_save(response["results"])
 attacher.derivatives #=>
 # {
 #   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,
@@ -122,7 +122,7 @@ class PromoteJob
   def perform(record, name, file_data)
     attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
     attacher.atomic_promote
-    attacher.transloadit_process(:video)
+    attacher.transloadit_process
     # ...
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
   end
@@ -135,7 +135,7 @@ When using [assembly notifications], the attacher data can be sent to the
 webhook via `:fields`:
 
 ```rb
-Attacher.transloadit_processor :video do
+Attacher.transloadit_processor do
   # ...
   assembly = transloadit.assembly(
     steps:      [ ... ],
@@ -167,7 +167,7 @@ post "/transloadit/video" do
   record_class = Object.const_get(record_class)
 
   attacher    = record_class.send(:"#{name}_attacher")
-  derivatives = attacher.transloadit_save(:video, response["results"])
+  derivatives = attacher.transloadit_save(response["results"])
 
   begin
     record   = record_class.find(record_id)
@@ -217,7 +217,7 @@ storage, you can skip promotion on the Shrine side:
 
 ```rb
 class VideoUploader < Shrine
-  Attacher.transloadit_processor :video do
+  Attacher.transloadit_processor do
     import = file.transloadit_import_step
     encode = transloadit_step "encode", "/video/encode", use: import
     thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
@@ -227,7 +227,7 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |results|
+  Attacher.transloadit_saver do |results|
     stored     = store.transloadit_file(results["import"])
     transcoded = store.transloadit_file(results["encode"])
     thumbnails = store.transloadit_files(results["thumbs"])
@@ -242,14 +242,14 @@ class PromoteJob
   def perform(record, name, file_data)
     attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
 
-    response = attacher.transloadit_process(:video)
+    response = attacher.transloadit_process
     response.reload_until_finished!
 
     if response.error?
       # handle error
     end
 
-    attacher.transloadit_save(:video, response["results"])
+    attacher.transloadit_save(response["results"])
     attacher.atomic_persist attacher.uploaded_file(file_data)
   rescue Shrine::AttachmentChanged, ActiveRecord::RecordNotFound
     attacher&.destroy_attached # delete orphaned processed files
@@ -282,7 +282,7 @@ the `:url` storage, and then upload them to your permanent storage:
 
 ```rb
 class VideoUploader < Shrine
-  Attacher.transloadit_processor :video do
+  Attacher.transloadit_processor do
     import = file.transloadit_import_step
     encode = transloadit_step "encode", "/video/encode", use: import
     thumbs = transloadit_step "thumbs", "/video/thumbs", use: import
@@ -292,7 +292,7 @@ class VideoUploader < Shrine
     assembly.create!
   end
 
-  Attacher.transloadit_saver :video do |results|
+  Attacher.transloadit_saver do |results|
     url        = shrine_class.new(:url)
     transcoded = url.transloadit_file(results["encode"])
     thumbnails = url.transloadit_files(results["thumbs"])
@@ -307,14 +307,14 @@ class VideoUploader < Shrine
 end
 ```
 ```rb
-response = attacher.transloadit_process(:video)
+response = attacher.transloadit_process
 response.reload_until_finished!
 
 if response.error?
   # handle error
 end
 
-attacher.transloadit_save(:video, response["results"])
+attacher.transloadit_save(response["results"])
 attacher.derivatives #=>
 # {
 #   transcoded: #<Shrine::UploadedFile storage_key=:store ...>,

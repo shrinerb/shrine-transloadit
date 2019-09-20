@@ -22,6 +22,12 @@ describe Shrine::Plugins::Transloadit do
         assert_equal Hash[some: "result"], @attacher.transloadit_process(:thumbs)
       end
 
+      it "executes default processor" do
+        @attacher.class.transloadit_processor { { some: "result" } }
+
+        assert_equal Hash[some: "result"], @attacher.transloadit_process
+      end
+
       it "evaluates processor in context of attacher instance" do
         @attacher.class.transloadit_processor(:thumbs) { self }
 
@@ -57,6 +63,12 @@ describe Shrine::Plugins::Transloadit do
         @attacher.class.transloadit_saver(:thumbs) { { some: "result" } }
 
         assert_equal Hash[some: "result"], @attacher.transloadit_save(:thumbs)
+      end
+
+      it "executes default saver" do
+        @attacher.class.transloadit_saver { { some: "result" } }
+
+        assert_equal Hash[some: "result"], @attacher.transloadit_save
       end
 
       it "evaluates saver in context of attacher instance" do
