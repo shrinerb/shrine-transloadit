@@ -118,9 +118,20 @@ When using [backgrounding], it's probably best to create the assembly after
 promotion:
 
 ```rb
+Shrine.plugin :backgrounding
+Shrine::Attacher.promote_block do
+  PromoteJob.perform_async(self.class.name, record.class.name, record.id, name, file_data)
+end
+```
+```rb
 class PromoteJob
-  def perform(record, name, file_data)
-    attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
+  include Sidekiq::Worker
+
+  def perform(attacher_class, record_class, record_id, name, file_data)
+    attacher_class = Object.const_get(attacher_class)
+    record         = Object.const_get(record_class).find(record_id) # if using Active Record
+
+    attacher = attacher_class.retrieve(model: record, name: name, file: file_data)
     attacher.atomic_promote
     attacher.transloadit_process
     # ...
@@ -239,8 +250,13 @@ end
 ```
 ```rb
 class PromoteJob
-  def perform(record, name, file_data)
-    attacher = Shrine::Attacher.retrieve(model: record, name: name, file: file_data)
+  include Sidekiq::Worker
+
+  def perform(attacher_class, record_class, record_id, name, file_data)
+    attacher_class = Object.const_get(attacher_class)
+    record         = Object.const_get(record_class).find(record_id) # if using Active Record
+
+    attacher = attacher_class.retrieve(model: record, name: name, file: file_data)
 
     response = attacher.transloadit_process
     response.reload_until_finished!
