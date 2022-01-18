@@ -92,7 +92,7 @@ describe Shrine::Plugins::Transloadit do
 
     describe "#transloadit_step" do
       it "returns a Transloadit::Step" do
-        step = @attacher.transloadit_step "name", "/my/robot", { foo: "bar" }
+        step = @attacher.transloadit_step "name", "/my/robot", foo: "bar"
 
         assert_instance_of Transloadit::Step, step
         assert_equal "name",                  step.name
