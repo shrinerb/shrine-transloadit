@@ -57,25 +57,25 @@ class Shrine
       end
 
       module AttacherMethods
-        def transloadit_process(name = :default, *args)
+        def transloadit_process(name = :default, *args, **kwargs)
           processor = self.class.transloadit_processor(name)
           instrument_transloadit(name) do
-            instance_exec(*args, &processor)
+            instance_exec(*args, **kwargs, &processor)
           end
         end
 
-        def transloadit_save(name = :default, *args)
+        def transloadit_save(name = :default, *args, **kwargs)
           unless name.respond_to?(:to_sym)
             args.prepend(name)
             name = :default
           end
 
           saver = self.class.transloadit_saver(name)
-          instance_exec(*args, &saver)
+          instance_exec(*args, **kwargs, &saver)
         end
 
-        def transloadit_step(*args)
-          shrine_class.transloadit_step(*args)
+        def transloadit_step(*args, **kwargs)
+          shrine_class.transloadit_step(*args, **kwargs)
         end
 
         def transloadit
@@ -92,7 +92,9 @@ class Shrine
       end
 
       module ClassMethods
-        def transloadit_step(name, robot, use: nil, **options)
+        def transloadit_step(name, robot, **options)
+          use = options.delete(:use)
+
           if Array(use).first.is_a?(::Transloadit::Step)
             step = transloadit.step(name, robot, **options)
             step.use(use) if use
@@ -198,8 +200,8 @@ class Shrine
             **options
         end
 
-        def transloadit_step(*args)
-          self.class.transloadit_step(*args)
+        def transloadit_step(*args, **kwargs)
+          self.class.transloadit_step(*args, **kwargs)
         end
       end
 
@@ -245,8 +247,8 @@ class Shrine
             **options
         end
 
-        def transloadit_step(*args)
-          shrine_class.transloadit_step(*args)
+        def transloadit_step(*args, **kwargs)
+          shrine_class.transloadit_step(*args, **kwargs)
         end
       end
     end
